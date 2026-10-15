@@ -1,6 +1,6 @@
 [package]
 name = "ftop"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2024"
 license = "MIT"
 description = "A quiet, native cross-platform system monitor built with GPUI Kit"

@@ -36,6 +36,7 @@ struct TooltipText(String);
 impl Render for TooltipText {
     fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
         div()
+            .max_w(px(420.))
             .px(px(10.))
             .py(px(6.))
             .rounded(px(8.))

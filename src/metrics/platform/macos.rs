@@ -238,6 +238,16 @@ impl Backend {
                 snapshot.pressure = Some(pressure as u32);
             }
         }
+        snapshot.power_label = Some("整机功耗（SMC PSTR）".into());
+        snapshot.compressed_label = Some("Compressed".into());
+        snapshot.gpu_info = Some("macOS · 原版 IOReport / IOKit 硬件采集".into());
+        snapshot.memory_pressure_info = snapshot
+            .pressure
+            .map(|p| format!("macOS 内存压力等级 {p}（1 正常 / 2 警告 / 4 严重）"));
+        snapshot.capabilities.push((
+            "硬件传感器".into(),
+            "GPU/SMC/IOReport 取决于机器型号和驱动开放情况；失败时不使用占位数据".into(),
+        ));
         self.samples += 1;
         snapshot
     }

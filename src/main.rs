@@ -225,12 +225,16 @@ impl Monitor {
             "▦" => format!("CPU · 处理器总占用 {:.0}%", self.data.cpu),
             "◌" => "CPU · 进程处理器占用".into(),
             "▥" => format!(
-                "内存 · 已用 {} / 总计 {} GB",
+                "内存 · 已用 {} / 总计 {} GB · {}",
                 gb(self.data.memory),
-                gb(self.data.total_memory)
+                gb(self.data.total_memory),
+                self.data
+                    .memory_pressure_info
+                    .as_deref()
+                    .unwrap_or("压力传感器未开放")
             ),
             "▧" => format!(
-                "GPU · 图形处理器占用 {} · 显存 {}",
+                "GPU · 图形处理器占用 {} · GPU 内存 {} · 温度 {} · 频率 {} · {}",
                 self.data
                     .gpu_usage
                     .map(|v| format!("{v:.0}%"))
@@ -238,13 +242,35 @@ impl Monitor {
                 self.data
                     .gpu_memory
                     .map(|v| format!("{} GB", gb(v)))
-                    .unwrap_or_else(|| "不可用".into())
+                    .unwrap_or_else(|| "不可用".into()),
+                self.data
+                    .gpu_temperature
+                    .map(|v| format!("{v:.0}°C"))
+                    .unwrap_or_else(|| "驱动未开放".into()),
+                self.data
+                    .gpu_frequency
+                    .map(|(current, maximum)| format!("{current}/{maximum} MHz"))
+                    .unwrap_or_else(|| "驱动未开放".into()),
+                self.data.gpu_info.as_deref().unwrap_or("等待 GPU 采样")
             ),
             "↓" => "网络 · 下载速率".into(),
             "↑" => "网络 · 上传速率".into(),
-            "ϟ" => "GPU · 图形处理器功耗（W）".into(),
-            "⌂" => "整机功耗（W）".into(),
-            "♧" => "温度 · 传感器读数（°C）".into(),
+            "ϟ" => format!(
+                "GPU 功耗（W）· {}",
+                self.data
+                    .gpu_info
+                    .as_deref()
+                    .unwrap_or("驱动未开放功率传感器")
+            ),
+            "⌂" => self.data.power_label.clone().unwrap_or_else(|| {
+                "电源驱动未提供当前功率（不以 CPU/GPU 功率冒充整机功率）".into()
+            }),
+            "♧" => self
+                .data
+                .temperature
+                .as_ref()
+                .map(|(label, _)| format!("温度 · {label}（°C）"))
+                .unwrap_or_else(|| "系统/驱动未开放温度传感器".into()),
             _ => "系统指标".into(),
         };
         div()
@@ -761,8 +787,17 @@ impl Render for Monitor {
                         .child(
                             self.data
                                 .compressed
-                                .map(|bytes| format!("Compressed {} GB", gb(bytes)))
-                                .unwrap_or_else(|| "Compressed —".into()),
+                                .map(|bytes| {
+                                    format!(
+                                        "{} {} GB",
+                                        self.data
+                                            .compressed_label
+                                            .as_deref()
+                                            .unwrap_or("Compressed"),
+                                        gb(bytes)
+                                    )
+                                })
+                                .unwrap_or_else(|| "压缩内存：未开放".into()),
                         )
                         .child(format!(
                             "{} {} / {} GB",
@@ -796,7 +831,7 @@ impl Render for Monitor {
                 .data
                 .gpu_usage
                 .map(|usage| format!("{usage:.0} %"))
-                .unwrap_or_else(|| "— %".into());
+                .unwrap_or_else(|| "不可用".into());
             readings = readings
                 .child(
                     div()
@@ -810,7 +845,7 @@ impl Render for Monitor {
                                 self.data
                                     .gpu_power
                                     .map(|watts| format!("{watts:.1} W"))
-                                    .unwrap_or_else(|| "— W".into()),
+                                    .unwrap_or_else(|| "不可用".into()),
                                 0xb294ff,
                             ),
                         ),
@@ -826,7 +861,7 @@ impl Render for Monitor {
                                 self.data
                                     .power
                                     .map(|watts| format!("{watts:.1} W"))
-                                    .unwrap_or_else(|| "— W".into()),
+                                    .unwrap_or_else(|| "不可用".into()),
                                 muted,
                             ),
                         )
@@ -840,7 +875,7 @@ impl Render for Monitor {
                                             .temperature
                                             .as_ref()
                                             .map(|(_, t)| format!("{t:.0}°"))
-                                            .unwrap_or_else(|| "— °C".into()),
+                                            .unwrap_or_else(|| "不可用".into()),
                                         muted,
                                     ),
                                 )
@@ -897,6 +932,25 @@ impl Render for Monitor {
             }
         }
         if self.controls {
+            let mut status = self
+                .data
+                .capabilities
+                .iter()
+                .map(|(name, detail)| format!("{name}：{detail}"))
+                .collect::<Vec<_>>();
+            status.push(
+                self.data
+                    .gpu_info
+                    .clone()
+                    .unwrap_or_else(|| "GPU 等待采样".into()),
+            );
+            let status = status.join("\n");
+            panel = panel.child(
+                Button::new("collection-status")
+                    .label("采集状态")
+                    .small()
+                    .tooltip(move |_, cx| chrome::tooltip(status.clone(), cx)),
+            );
             panel = panel.child(
                 Button::new("check-update")
                     .label("Check for updates")
@@ -959,6 +1013,17 @@ impl Render for Monitor {
 fn main() {
     if std::env::args().any(|a| a == "--version") {
         println!("ftop {}", env!("CARGO_PKG_VERSION"));
+        return;
+    }
+    if std::env::args().any(|a| a == "--diagnostics") {
+        let mut collector = metrics::Collector::new();
+        let _ = collector.sample();
+        std::thread::sleep(Duration::from_secs(1));
+        let s = collector.sample();
+        println!(
+            "{}",
+            serde_json::json!({"gpu_usage":s.gpu_usage,"gpu_memory":s.gpu_memory,"gpu_frequency":s.gpu_frequency,"gpu_power":s.gpu_power,"gpu_temperature":s.gpu_temperature,"gpu_info":s.gpu_info,"power":s.power,"power_label":s.power_label,"temperature":s.temperature,"compressed":s.compressed,"compressed_label":s.compressed_label,"memory_pressure":s.memory_pressure_info,"capabilities":s.capabilities})
+        );
         return;
     }
     gpui_kit::application()

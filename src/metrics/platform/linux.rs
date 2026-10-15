@@ -82,6 +82,8 @@ struct Sensor {
     cpu: bool,
 }
 pub struct Backend {
+    gpu: super::linux_gpu::Gpu,
+    energy: Vec<(PathBuf, u64, Option<(u64, Instant)>)>,
     cpu: HashMap<String, Ticks>,
     processes: HashMap<u32, (u64, u64)>,
     meta: Vec<CpuMeta>,
@@ -124,6 +126,8 @@ impl Backend {
             .filter_map(|e| e.file_name().into_string().ok())
             .collect();
         let mut this = Self {
+            gpu: super::linux_gpu::Gpu::new(),
+            energy: Vec::new(),
             cpu: HashMap::new(),
             processes: HashMap::new(),
             meta,
@@ -144,6 +148,20 @@ impl Backend {
         for line in stat.lines().filter(|line| line.starts_with("cpu")) {
             if let (Some(name), Some(ticks)) = (line.split_whitespace().next(), cpu_ticks(line)) {
                 this.cpu.insert(name.into(), ticks);
+            }
+        }
+        for zone in fs::read_dir("/sys/class/powercap")
+            .into_iter()
+            .flatten()
+            .flatten()
+        {
+            let name = fs::read_to_string(zone.path().join("name")).unwrap_or_default();
+            if name.trim().starts_with("package-") {
+                this.energy.push((
+                    zone.path().join("energy_uj"),
+                    number(zone.path().join("max_energy_range_uj")).unwrap_or(0),
+                    None,
+                ));
             }
         }
         this.discover_sensors();
@@ -326,6 +344,74 @@ impl Backend {
         }
         self.samples += 1;
         let processes = self.read_processes(elapsed);
+        let gpu = self.gpu.sample();
+        let mut package_watts = None;
+        for (path, range, last) in &mut self.energy {
+            if let Some(current) = number(path) {
+                if let Some((previous, time)) = last.replace((current, started)) {
+                    let delta = if current >= previous {
+                        current - previous
+                    } else if *range > previous {
+                        *range - previous + current
+                    } else {
+                        continue;
+                    };
+                    let watts =
+                        delta as f64 / 1e6 / started.duration_since(time).as_secs_f64().max(0.001);
+                    package_watts = Some(package_watts.unwrap_or(0f32) + watts as f32);
+                }
+            }
+        }
+        let zram = fs::read_dir("/sys/block")
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter(|e| e.file_name().to_string_lossy().starts_with("zram"))
+            .filter_map(|e| {
+                fs::read_to_string(e.path().join("mm_stat"))
+                    .ok()
+                    .and_then(|v| v.split_whitespace().nth(1)?.parse::<u64>().ok())
+            })
+            .reduce(u64::saturating_add);
+        let compressed = match (values.get("Zswap").copied(), zram) {
+            (Some(a), Some(b)) => Some(a.saturating_add(b)),
+            (a, b) => a.or(b),
+        };
+        let pressure_info = fs::read_to_string("/proc/pressure/memory")
+            .ok()
+            .and_then(|text| {
+                text.lines()
+                    .find(|l| l.starts_with("some "))
+                    .map(|l| format!("Linux PSI 内存等待 · {}", l.trim_start_matches("some ")))
+            });
+        let battery = fs::read_dir("/sys/class/power_supply")
+            .into_iter()
+            .flatten()
+            .flatten()
+            .find_map(|e| {
+                if fs::read_to_string(e.path().join("status")).ok()?.trim() != "Discharging" {
+                    return None;
+                }
+                number(e.path().join("power_now"))
+                    .map(|v| v as f32 / 1e6)
+                    .or_else(|| {
+                        Some(
+                            number(e.path().join("current_now"))? as f32
+                                * number(e.path().join("voltage_now"))? as f32
+                                / 1e12,
+                        )
+                    })
+            });
+        let compressed_label = Some(
+            if values.contains_key("Zswap") && zram.is_some() {
+                "Zswap+Zram"
+            } else if zram.is_some() {
+                "Zram"
+            } else {
+                "Zswap"
+            }
+            .into(),
+        );
         Snapshot {
             cpu: usage.get("cpu").copied().unwrap_or(0.),
             cores,
@@ -337,7 +423,42 @@ impl Backend {
             download,
             upload,
             processes,
-            temperature: self.temperature.clone(),
+            temperature: self
+                .temperature
+                .clone()
+                .or_else(|| gpu.gpu_temperature.map(|v| ("GPU 温度".into(), v))),
+            compressed,
+            compressed_label,
+            memory_pressure_info: pressure_info,
+            gpu_usage: gpu.gpu_usage,
+            gpu_memory: gpu.gpu_memory,
+            gpu_frequency: gpu.gpu_frequency,
+            gpu_power: gpu.gpu_power,
+            gpu_temperature: gpu.gpu_temperature,
+            gpu_info: gpu.gpu_info,
+            power: battery.or(package_watts),
+            power_label: Some(
+                if battery.is_some() {
+                    "电池放电功率"
+                } else {
+                    "CPU 封装功耗（RAPL，非整机）"
+                }
+                .into(),
+            ),
+            capabilities: vec![
+                (
+                    "GPU".into(),
+                    "AMD sysfs / Intel PMU 或 DRM fdinfo / NVIDIA NVML；无外部采样进程".into(),
+                ),
+                (
+                    "功耗".into(),
+                    "RAPL 需要内核开放 energy_uj 读取权限；不自动提权".into(),
+                ),
+                (
+                    "压缩内存".into(),
+                    "Zswap 或 Zram 物理压缩数据量；未启用时没有此读数".into(),
+                ),
+            ],
             ..Snapshot::default()
         }
     }

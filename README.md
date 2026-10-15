@@ -44,10 +44,12 @@ Metra 的 Windows NSIS 应用内签名更新依赖 Tauri，本项目尚未实现
 
 ## 待验证与差异
 
-目标平台为 macOS Apple Silicon / Intel、Windows x86_64、Ubuntu 24.04 x86_64；各平台编译与桌面验收状态见 [验证记录](docs/VALIDATION.md)。原版系统材质、核心分组、应用图标、原版完整动画、吸附尺寸、菜单栏/托盘、置顶与隐藏、系统主题自动跟随、文件热重载尚未完整复刻。没有使用演示数据代替真实采集。
+目标平台为 macOS Apple Silicon / Intel、Windows x86_64、Ubuntu 24.04 x86_64；各平台编译与桌面验收状态见 [验证记录](docs/VALIDATION.md)。原版系统材质、核心分组、原版完整动画、吸附尺寸、菜单栏/托盘、置顶与隐藏、系统主题自动跟随、文件热重载尚未完整复刻。没有使用演示数据代替真实采集。
 
 本机 Ubuntu 26.04 的 X11 输入法需 `XMODIFIERS=@im=none` 临时启动；Wayland 不需要此参数。
 
 在目标系统运行 `python3 scripts/package.py` 构建原生包：macOS `.app.zip`、Windows Portable ZIP、Ubuntu `.deb`。尚未验证安装流程。Ubuntu 24.04 发行包必须在 Ubuntu 24.04 构建；脚本按构建宿主的 glibc 版本声明最低依赖，避免把更新系统产物误标为兼容旧版。
 
 性能测量使用 `cargo build --release` 后运行 `python3 scripts/benchmark.py --binary target/release/ftop --seconds 15 --backend x11`。脚本区分单核与整机 CPU，并记录 RSS；详见 [性能记录](docs/PERFORMANCE.md)。
+
+采集覆盖和限制见 [平台指标矩阵](docs/METRICS.md)。指标图标可悬停查看名称、传感器来源及不可用原因；设置中的“采集状态”汇总能力。`--diagnostics` 输出硬件指标诊断（Windows GUI 正式包无控制台）。

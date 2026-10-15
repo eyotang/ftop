@@ -1686,6 +1686,7 @@ dependencies = [
  "embed-resource",
  "gpui-kit",
  "libc",
+ "libloading",
  "raw-window-handle",
  "reqwest",
  "serde",

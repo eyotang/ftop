@@ -14,3 +14,12 @@ pub use macos::Backend;
 pub use windows::Backend;
 #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
 compile_error!("ftop supports Ubuntu/Linux, macOS and Windows");
+
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+mod nvidia;
+
+#[cfg(target_os = "windows")]
+mod windows_gpu;
+
+#[cfg(target_os = "linux")]
+mod linux_gpu;

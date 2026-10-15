@@ -53,3 +53,9 @@ Metra 的 Windows NSIS 应用内签名更新依赖 Tauri，本项目尚未实现
 性能测量使用 `cargo build --release` 后运行 `python3 scripts/benchmark.py --binary target/release/ftop --seconds 15 --backend x11`。脚本区分单核与整机 CPU，并记录 RSS；详见 [性能记录](docs/PERFORMANCE.md)。
 
 采集覆盖和限制见 [平台指标矩阵](docs/METRICS.md)。指标图标可悬停查看名称、传感器来源及不可用原因；设置中的“采集状态”汇总能力。`--diagnostics` 输出硬件指标诊断（Windows GUI 正式包无控制台）。
+
+### Language / 语言
+
+Open **•••** and choose **Language / 语言**: System, 简体中文, English, 日本語, or 한국어. The selection takes effect immediately and is saved. System follows the OS language, with English as the fallback. Controls, metric tooltips, update status and sensor explanations are localized; process names, units and driver identifiers stay unchanged. This follows Metra's four-language policy using a native Rust catalog.
+
+See [UI comparison](docs/UI-COMPARISON.md) for the upstream design audit and remaining differences.

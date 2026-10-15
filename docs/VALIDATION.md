@@ -48,3 +48,13 @@ The GPU percentage is positioned above its column without participating in flex 
 Local Ubuntu X11 native screenshots verify CPU icon and numeric-area tooltips, memory tooltip, and GPU-column tooltip across multiple one-second samples, with matching CPU/GPU bar bounds. Evidence remains ignored under docs/evidence/hover-fix-*.png. Formatting, locked check/build, and all 11 tests pass. macOS/Windows native appearance and Ubuntu Wayland input remain unverified for this revision.
 
 GPU header now includes the same circular badge treatment as CPU, with a graphics-card SVG rather than the generic layers symbol. Native Ubuntu X11 screenshot gpu-header-icon.png confirms the icon/percentage row and unchanged bar alignment. Locked check/build and all 11 tests pass; no collection or animation changes.
+
+## UI audit and four-language revision
+
+Compared current upstream `Theme.swift`, `SceneBuilder.swift` and glyph definitions, rather than relying solely on older render fixtures. Corrections and remaining differences are listed in UI-COMPARISON.md. CPU/GPU title slots, circular GPU gauge, light/dark palette values, padding, module spacing, numbered-core weight and sort descriptions were corrected. A narrow-header clamp reserves room for the settings button. Settings visibility no longer moves the GPU title out of the shared header.
+
+Local checks: formatting, locked check/build and 15 tests pass. New tests cover locale aliases, English fallback, catalog completeness for application-owned sensor messages, numeric/identifier preservation, old-config migration, all persisted language choices and unsupported saved language fallback without losing other settings.
+
+Native Ubuntu X11 screenshots use isolated temporary settings for English, Simplified Chinese, Japanese and Korean, including light/Sea and dark/Warm. Settings-page screenshots used a temporary initial-open fixture (removed after capture); they verify rendering, not successful OS pointer/keyboard selection. Final normal-start wide and minimum-width Korean screenshots confirm no header/button overlap and consistent rendering of multiword availability labels. Raw evidence remains ignored. macOS/Windows native input/font/layout and Ubuntu Wayland acceptance are not verified by these screenshots.
+
+Final Release measurement: 2.80% of one core / 0.233% of the 12-thread machine / 118.54 MiB RSS, compared with pre-localization 2.90% / 0.242% / 119.62 MiB under the same short-run conditions. This is no evidence of meaningful extra cost, not proof of meeting the original budget. See PERFORMANCE.md.

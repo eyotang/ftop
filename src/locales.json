@@ -1,0 +1,554 @@
+[
+  [
+    "Done",
+    "完成",
+    "完了",
+    "완료"
+  ],
+  [
+    "Minimize",
+    "最小化",
+    "最小化",
+    "최소화"
+  ],
+  [
+    "Quit",
+    "退出",
+    "終了",
+    "종료"
+  ],
+  [
+    "Cores",
+    "核心",
+    "コア",
+    "코어"
+  ],
+  [
+    "Memory",
+    "内存",
+    "メモリ",
+    "메모리"
+  ],
+  [
+    "Network",
+    "网络",
+    "ネットワーク",
+    "네트워크"
+  ],
+  [
+    "Processes",
+    "进程",
+    "プロセス",
+    "프로세스"
+  ],
+  [
+    "Light",
+    "浅色",
+    "ライト",
+    "라이트"
+  ],
+  [
+    "Motion",
+    "动效",
+    "アニメーション",
+    "애니메이션"
+  ],
+  [
+    "Sea / Graphite / Warm",
+    "海 / 石墨 / 暖色",
+    "海 / グラファイト / 暖色",
+    "바다 / 흑연 / 따뜻함"
+  ],
+  [
+    "Language",
+    "语言",
+    "言語",
+    "언어"
+  ],
+  [
+    "System",
+    "跟随系统",
+    "システム",
+    "시스템"
+  ],
+  [
+    "Sort by CPU",
+    "按 CPU 排序",
+    "CPU 順に並べ替え",
+    "CPU순 정렬"
+  ],
+  [
+    "Sort by memory",
+    "按内存排序",
+    "メモリ順に並べ替え",
+    "메모리순 정렬"
+  ],
+  [
+    "Collection status",
+    "采集状态",
+    "センサーの状態",
+    "수집 상태"
+  ],
+  [
+    "Check for updates",
+    "检查更新",
+    "更新を確認",
+    "업데이트 확인"
+  ],
+  [
+    "Checking…",
+    "正在检查…",
+    "確認中…",
+    "확인 중…"
+  ],
+  [
+    "Up to date",
+    "已是最新版本",
+    "最新バージョンです",
+    "최신 버전입니다"
+  ],
+  [
+    "Updates: manual download · checks daily",
+    "更新：手动下载 · 每日检查",
+    "更新：手動ダウンロード・毎日確認",
+    "업데이트: 수동 다운로드 · 매일 확인"
+  ],
+  [
+    "Open release",
+    "打开发布页",
+    "リリースを開く",
+    "릴리스 열기"
+  ],
+  [
+    "Update check failed:",
+    "更新检查失败：",
+    "更新の確認に失敗：",
+    "업데이트 확인 실패:"
+  ],
+  [
+    "Version",
+    "版本",
+    "バージョン",
+    "버전"
+  ],
+  [
+    "available · manual download",
+    "可用 · 手动下载",
+    "利用可能・手動ダウンロード",
+    "사용 가능 · 수동 다운로드"
+  ],
+  [
+    "Reading system metrics…",
+    "正在读取系统指标…",
+    "システム情報を取得中…",
+    "시스템 지표 읽는 중…"
+  ],
+  [
+    "Could not save settings:",
+    "无法保存设置：",
+    "設定を保存できません：",
+    "설정을 저장할 수 없습니다:"
+  ],
+  [
+    "processes",
+    "个进程",
+    "プロセス",
+    "개 프로세스"
+  ],
+  [
+    "Compressed",
+    "压缩内存",
+    "圧縮メモリ",
+    "압축 메모리"
+  ],
+  [
+    "Swap",
+    "交换",
+    "スワップ",
+    "스왑"
+  ],
+  [
+    "Commit",
+    "提交量",
+    "コミット",
+    "커밋"
+  ],
+  [
+    "Unavailable",
+    "不可用",
+    "取得不可",
+    "사용 불가"
+  ],
+  [
+    "Compressed memory unavailable",
+    "压缩内存：未开放",
+    "圧縮メモリを取得できません",
+    "압축 메모리 사용 불가"
+  ],
+  [
+    "Temperature unavailable",
+    "温度不可用",
+    "温度を取得できません",
+    "온도 사용 불가"
+  ],
+  [
+    "CPU usage",
+    "处理器总占用",
+    "CPU 使用率",
+    "CPU 사용률"
+  ],
+  [
+    "Process CPU usage",
+    "进程处理器占用",
+    "プロセスの CPU 使用率",
+    "프로세스 CPU 사용률"
+  ],
+  [
+    "used",
+    "已用",
+    "使用中",
+    "사용 중"
+  ],
+  [
+    "total",
+    "总计",
+    "合計",
+    "전체"
+  ],
+  [
+    "Memory pressure unavailable",
+    "压力传感器未开放",
+    "メモリプレッシャー取得不可",
+    "메모리 압력 사용 불가"
+  ],
+  [
+    "GPU utilization",
+    "图形处理器占用",
+    "GPU 使用率",
+    "GPU 사용률"
+  ],
+  [
+    "GPU memory",
+    "GPU 内存",
+    "GPU メモリ",
+    "GPU 메모리"
+  ],
+  [
+    "Temperature",
+    "温度",
+    "温度",
+    "온도"
+  ],
+  [
+    "Frequency",
+    "频率",
+    "周波数",
+    "클럭"
+  ],
+  [
+    "No sensor reading",
+    "当前接口无读数",
+    "センサーの読み取りなし",
+    "센서 판독값 없음"
+  ],
+  [
+    "Waiting for GPU sample",
+    "等待 GPU 采样",
+    "GPU サンプル待機中",
+    "GPU 샘플 대기 중"
+  ],
+  [
+    "Waiting for GPU sample",
+    "GPU 等待采样",
+    "GPU サンプル待機中",
+    "GPU 샘플 대기 중"
+  ],
+  [
+    "Download rate",
+    "下载速率",
+    "受信速度",
+    "다운로드 속도"
+  ],
+  [
+    "Upload rate",
+    "上传速率",
+    "送信速度",
+    "업로드 속도"
+  ],
+  [
+    "GPU power (W)",
+    "GPU 功耗（W）",
+    "GPU 電力（W）",
+    "GPU 전력(W)"
+  ],
+  [
+    "Power source unavailable; CPU/GPU power is not whole-system power",
+    "当前接口未获取到功率（不以 CPU/GPU 功率冒充整机功率）",
+    "電力取得不可（CPU/GPU 電力はシステム全体の電力ではありません）",
+    "전력 사용 불가(CPU/GPU 전력은 시스템 전체 전력이 아님)"
+  ],
+  [
+    "Temperature sensor unavailable",
+    "系统/当前接口无读数温度传感器",
+    "温度センサー取得不可",
+    "온도 센서 사용 불가"
+  ],
+  [
+    "System metric",
+    "系统指标",
+    "システム指標",
+    "시스템 지표"
+  ],
+  [
+    "Core",
+    "核心",
+    "コア",
+    "코어"
+  ],
+  [
+    "reported",
+    "报告值",
+    "報告値",
+    "보고값"
+  ],
+  [
+    "Battery discharge power",
+    "电池放电功率",
+    "バッテリー放電電力",
+    "배터리 방전 전력"
+  ],
+  [
+    "CPU package power (RAPL, not whole-system)",
+    "CPU 封装功耗（RAPL，非整机）",
+    "CPU パッケージ電力（RAPL、システム全体ではありません）",
+    "CPU 패키지 전력(RAPL, 시스템 전체 아님)"
+  ],
+  [
+    "Whole-system power (SMC PSTR)",
+    "整机功耗（SMC PSTR）",
+    "システム全体の電力（SMC PSTR）",
+    "시스템 전체 전력(SMC PSTR)"
+  ],
+  [
+    "Linux PSI memory stalls",
+    "Linux PSI 内存等待",
+    "Linux PSI メモリ待機",
+    "Linux PSI 메모리 대기"
+  ],
+  [
+    "macOS memory pressure level",
+    "macOS 内存压力等级",
+    "macOS メモリプレッシャーレベル",
+    "macOS 메모리 압력 수준"
+  ],
+  [
+    "(1 normal / 2 warning / 4 critical)",
+    "（1 正常 / 2 警告 / 4 严重）",
+    "（1 正常 / 2 警告 / 4 重大）",
+    "(1 정상 / 2 경고 / 4 위험)"
+  ],
+  [
+    "macOS · upstream IOReport / IOKit hardware collection",
+    "macOS · 原版 IOReport / IOKit 硬件采集",
+    "macOS・原版 IOReport / IOKit センサー",
+    "macOS · 원본 IOReport / IOKit 센서"
+  ],
+  [
+    "Intel GPU · busiest PMU engine",
+    "Intel GPU · PMU 最忙引擎",
+    "Intel GPU・PMU 最大使用エンジン",
+    "Intel GPU · PMU 최대 사용 엔진"
+  ],
+  [
+    "Intel GPU · accessible DRM fdinfo clients estimate; memory sums client resident bytes and may count shared buffers twice",
+    "Intel GPU · DRM fdinfo 可访问进程范围估计；GPU 内存为客户端 resident 合计，共享缓冲可能重复",
+    "Intel GPU・読み取り可能な DRM fdinfo の推定値。メモリは resident 合計で共有バッファが重複する場合があります",
+    "Intel GPU · 접근 가능한 DRM fdinfo 추정값. 메모리는 resident 합계이며 공유 버퍼가 중복될 수 있음"
+  ],
+  [
+    "Intel PMU waiting for second valid sample",
+    "Intel PMU 等待第二次有效采样",
+    "Intel PMU 有効な２回目のサンプル待ち",
+    "Intel PMU 두 번째 유효 샘플 대기"
+  ],
+  [
+    "GPU counters unavailable: DRM sysfs, Intel PMU or NVIDIA NVML required",
+    "未发现可用的 GPU 驱动计数器：需要 DRM sysfs、Intel PMU 或 NVIDIA NVML",
+    "GPU カウンター取得不可：DRM sysfs、Intel PMU または NVIDIA NVML が必要",
+    "GPU 카운터 사용 불가: DRM sysfs, Intel PMU 또는 NVIDIA NVML 필요"
+  ],
+  [
+    "Hardware sensors",
+    "硬件传感器",
+    "ハードウェアセンサー",
+    "하드웨어 센서"
+  ],
+  [
+    "GPU/SMC/IOReport depend on model and driver; failures never use placeholder data",
+    "GPU/SMC/IOReport 取决于机器型号和驱动开放情况；失败时不使用占位数据",
+    "GPU/SMC/IOReport は機種とドライバーに依存。失敗時は代替値を表示しません",
+    "GPU/SMC/IOReport는 기종과 드라이버에 따라 다름. 실패 시 임의 값 표시 안 함"
+  ],
+  [
+    "Power",
+    "功耗",
+    "電力",
+    "전력"
+  ],
+  [
+    "RAPL requires kernel permission to read energy_uj; no automatic privilege elevation",
+    "RAPL 需要内核开放 energy_uj 读取权限；不自动提权",
+    "RAPL は energy_uj の読み取り権限が必要。自動昇格なし",
+    "RAPL은 energy_uj 읽기 권한 필요. 자동 권한 상승 없음"
+  ],
+  [
+    "Zswap or Zram physical compressed bytes; no reading when disabled",
+    "Zswap 或 Zram 物理压缩数据量；未启用时没有此读数",
+    "Zswap または Zram の物理圧縮量。無効時は取得不可",
+    "Zswap 또는 Zram 물리 압축 크기. 비활성화 시 값 없음"
+  ],
+  [
+    "AMD sysfs / Intel PMU or DRM fdinfo / NVIDIA NVML; no external sampling processes",
+    "AMD sysfs / Intel PMU 或 DRM fdinfo / NVIDIA NVML；无外部采样进程",
+    "AMD sysfs / Intel PMU または DRM fdinfo / NVIDIA NVML。外部収集プロセスなし",
+    "AMD sysfs / Intel PMU 또는 DRM fdinfo / NVIDIA NVML. 외부 수집 프로세스 없음"
+  ],
+  [
+    "Whole-system power",
+    "整机功耗",
+    "システム全体の電力",
+    "시스템 전체 전력"
+  ],
+  [
+    "CPU frequency",
+    "CPU 频率",
+    "CPU 周波数",
+    "CPU 클럭"
+  ],
+  [
+    "Windows PDH driver-reported value, not necessarily instantaneous effective per-core frequency",
+    "Windows PDH 驱动报告值，不保证是每核瞬时有效频率",
+    "Windows PDH ドライバー報告値。各コアの実効瞬時周波数とは限りません",
+    "Windows PDH 드라이버 보고값. 코어별 순간 유효 클럭은 아닐 수 있음"
+  ],
+  [
+    "ACPI thermal zone or NVIDIA GPU; ACPI temperature is not CPU core temperature",
+    "ACPI thermal zone 或 NVIDIA GPU；不把 ACPI 温度标为 CPU 核心温度",
+    "ACPI thermal zone または NVIDIA GPU。ACPI 温度は CPU コア温度ではありません",
+    "ACPI thermal zone 또는 NVIDIA GPU. ACPI 온도는 CPU 코어 온도가 아님"
+  ],
+  [
+    "Prefer battery discharge; otherwise named CPU/APU/GPU Energy Meter domains; partial power is not whole-system power",
+    "优先电池放电功率，否则尝试 Energy Meter 的 CPU/APU/GPU 命名域；局部功耗不作为整机总功耗",
+    "バッテリー放電を優先、次に Energy Meter の CPU/APU/GPU 領域。部分電力はシステム全体ではありません",
+    "배터리 방전 우선, 그 외 Energy Meter CPU/APU/GPU 영역. 부분 전력은 전체 전력이 아님"
+  ],
+  [
+    "Windows has no integrated public compressed-store API; undocumented kernel structures are not used",
+    "Windows 没有已接入的公开压缩存储 API；不使用未公开内核结构",
+    "Windows の公開圧縮ストア API は未接続。非公開カーネル構造は使用しません",
+    "Windows 공개 압축 저장소 API 미연결. 비공개 커널 구조 사용 안 함"
+  ],
+  [
+    "Windows GPU counters unavailable (WDDM-capable driver required)",
+    "Windows GPU 性能计数器未开放（需要支持 WDDM 的驱动）",
+    "Windows GPU カウンター取得不可（WDDM ドライバーが必要）",
+    "Windows GPU 카운터 사용 불가(WDDM 드라이버 필요)"
+  ],
+  [
+    "Windows WDDM · PDH · busiest engine; memory is dedicated + shared across all adapters",
+    "Windows WDDM · PDH · 最忙引擎占用；显存为所有适配器专用+共享用量",
+    "Windows WDDM・PDH・最大使用エンジン。メモリは全アダプターの専用＋共有",
+    "Windows WDDM · PDH · 최대 사용 엔진. 메모리는 전체 어댑터 전용+공유 합계"
+  ],
+  [
+    "WDDM GPU engine counter invalid: unsupported driver or waiting for second sample",
+    "WDDM GPU 引擎计数器无有效读数：驱动不支持或等待第二次采样",
+    "WDDM GPU カウンター無効：非対応ドライバーまたは２回目のサンプル待ち",
+    "WDDM GPU 카운터 무효: 미지원 드라이버 또는 두 번째 샘플 대기"
+  ],
+  [
+    "(not whole-system)",
+    "（非整机）",
+    "（システム全体ではありません）",
+    "(시스템 전체 아님)"
+  ],
+  [
+    "Windows battery driver",
+    "Windows 电池驱动",
+    "Windows バッテリードライバー",
+    "Windows 배터리 드라이버"
+  ],
+  [
+    "Windows physical memory load",
+    "Windows 物理内存负载",
+    "Windows 物理メモリ負荷",
+    "Windows 물리 메모리 부하"
+  ],
+  [
+    "(not macOS memory pressure)",
+    "（不是 macOS 内存压力等级）",
+    "（macOS メモリプレッシャーではありません）",
+    "(macOS 메모리 압력 아님)"
+  ],
+  [
+    "WDDM/PDH utilization and memory; NVIDIA NVML power/frequency/temperature (busiest NVIDIA GPU)",
+    "WDDM/PDH 占用与显存；NVIDIA NVML 功耗/频率/温度（NVIDIA 最忙卡）",
+    "WDDM/PDH 使用率とメモリ、NVIDIA NVML 電力/周波数/温度（最大使用 GPU）",
+    "WDDM/PDH 사용률 및 메모리, NVIDIA NVML 전력/클럭/온도(최대 사용 GPU)"
+  ],
+  [
+    "NVML (busiest GPU; temperature updated every 5 seconds)",
+    "NVML（多卡显示最忙的一张；温度每5秒更新）",
+    "NVML（最大使用 GPU、温度は５秒ごと）",
+    "NVML(최대 사용 GPU, 온도 5초 간격)"
+  ],
+  [
+    "GPU counters unavailable: PMU",
+    "Intel GPU 计数器未开放：PMU",
+    "GPU カウンター取得不可：PMU",
+    "GPU 카운터 사용 불가: PMU"
+  ],
+  [
+    "; DRM fdinfo has no readable counters",
+    "；DRM fdinfo 无可读计数器",
+    "、DRM fdinfo の読み取り可能カウンターなし",
+    "; DRM fdinfo 읽기 가능 카운터 없음"
+  ],
+  [
+    "kernel gpu_busy_percent",
+    "内核 gpu_busy_percent",
+    "カーネル gpu_busy_percent",
+    "커널 gpu_busy_percent"
+  ],
+  [
+    "; GPU power from Energy Meter",
+    "；GPU 功耗来自 Energy Meter",
+    "、GPU 電力は Energy Meter",
+    "; GPU 전력 출처 Energy Meter"
+  ],
+  [
+    "Power sensor unavailable",
+    "当前接口无读数功率传感器",
+    "電力センサー取得不可",
+    "전력 센서 사용 불가"
+  ],
+  [
+    "Settings",
+    "设置",
+    "設定",
+    "설정"
+  ],
+  [
+    "Cannot read Linux CPU/memory counters",
+    "无法读取 Linux CPU/内存计数器",
+    "Linux CPU/メモリカウンターを読み取れません",
+    "Linux CPU/메모리 카운터를 읽을 수 없습니다"
+  ],
+  [
+    "GlobalMemoryStatusEx failed",
+    "GlobalMemoryStatusEx 调用失败",
+    "GlobalMemoryStatusEx 呼び出し失敗",
+    "GlobalMemoryStatusEx 호출 실패"
+  ]
+]

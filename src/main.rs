@@ -4,6 +4,7 @@
 )]
 
 mod chrome;
+mod i18n;
 mod metrics;
 mod sampling_gate;
 mod settings;
@@ -185,8 +186,22 @@ impl Monitor {
     fn save(&mut self) {
         self.error = self.settings.save().err();
     }
+    fn t(&self, text: &str) -> String {
+        self.settings.language.text(text)
+    }
+    fn gpu_color(&self) -> u32 {
+        if self.settings.light {
+            [0x7a4fd6, 0x8a6d2f, 0xb83280][self.settings.palette % 3]
+        } else {
+            [0xb294ff, 0xc9b98f, 0xff8fc4][self.settings.palette % 3]
+        }
+    }
     fn accent(&self) -> u32 {
-        [0x5b9bff, 0xf3f4f6, 0xff8468][self.settings.palette % 3]
+        if self.settings.light {
+            [0x1f5fe0, 0x1f2937, 0xdc4a2b][self.settings.palette % 3]
+        } else {
+            [0x5b9bff, 0xf3f4f6, 0xff8468][self.settings.palette % 3]
+        }
     }
     fn core_color(&self, group: usize) -> u32 {
         let last = self
@@ -198,7 +213,11 @@ impl Monitor {
             .unwrap_or(0)
             .max(1);
         let start = self.accent();
-        let end = [0x45d1bd, 0x9aa1ad, 0xffc857][self.settings.palette % 3];
+        let end = if self.settings.light {
+            [0x0b8f7e, 0x6b7280, 0xb9770a][self.settings.palette % 3]
+        } else {
+            [0x45d1bd, 0x9aa1ad, 0xffc857][self.settings.palette % 3]
+        };
         let t = group as f32 / last as f32;
         [16, 8, 0].into_iter().fold(0, |color, shift| {
             let a = ((start >> shift) & 255) as f32;
@@ -221,7 +240,7 @@ impl Monitor {
         }
     }
     fn metric_description(&self, glyph: &str) -> String {
-        match glyph {
+        self.t(&match glyph {
             "▦" => format!("CPU · 处理器总占用 {:.0}%", self.data.cpu),
             "◌" => "CPU · 进程处理器占用".into(),
             "▥" => format!(
@@ -274,10 +293,13 @@ impl Monitor {
                 .map(|(label, _)| format!("温度 · {label}（°C）"))
                 .unwrap_or_else(|| "系统/当前接口无读数温度传感器".into()),
             _ => "系统指标".into(),
-        }
+        })
     }
     fn badge(&self, glyph: &str, color: u32) -> Div {
         let description = self.metric_description(glyph);
+        self.badge_with_description(glyph, color, description)
+    }
+    fn badge_with_description(&self, glyph: &str, color: u32, description: String) -> Div {
         div()
             .flex()
             .items_center()
@@ -348,32 +370,15 @@ impl Monitor {
             .flex_col()
             .items_center()
             .gap(px(3.))
-            .child(
-                div()
-                    .absolute()
-                    .top(px(-25.))
-                    .flex()
-                    .items_center()
-                    .gap(px(3.))
-                    .child(self.badge("▧", 0xb294ff))
-                    .text_size(px(10.))
-                    .text_color(rgb(0xb294ff))
-                    .child(
-                        self.data
-                            .gpu_usage
-                            .map(|v| format!("{v:.0}%"))
-                            .unwrap_or_else(|| "—".into()),
-                    ),
-            )
             .child(self.bar(
                 self.data.gpu_usage.unwrap_or(0.),
                 frequency,
                 width,
                 height,
-                0xb294ff,
+                self.gpu_color(),
             ))
             .when(numbered, |column| {
-                // Match both CPU footer rows; the GPU percentage sits above the bar.
+                // Match both CPU footer rows; the GPU figure lives in the shared header.
                 column.child(div().text_size(px(10.)).child(" ")).child(
                     div()
                         .text_size(px(8.5))
@@ -427,7 +432,11 @@ impl Monitor {
             )
     }
     fn figure(&self, glyph: &str, value: String, color: u32) -> Stateful<Div> {
-        let (number, unit) = value.split_once(' ').unwrap_or((&value, ""));
+        let value = self.t(&value);
+        let (number, unit) = value
+            .split_once(' ')
+            .filter(|(number, _)| number.parse::<f64>().is_ok())
+            .unwrap_or((&value, ""));
         let description = self.metric_description(glyph);
         div()
             .id(SharedString::from(format!("metric-{glyph}")))
@@ -436,9 +445,10 @@ impl Monitor {
             .hover(|style| style.bg(rgba(0x88889922)))
             .flex()
             .items_center()
-            .gap(px(7.))
+            .gap(px(6.))
             .child(match glyph {
                 "▦" => self.gauge_badge(glyph, color, self.data.cpu),
+                "▧" => self.gauge_badge(glyph, color, self.data.gpu_usage.unwrap_or(0.)),
                 "▥" => self.gauge_badge(
                     glyph,
                     color,
@@ -478,17 +488,18 @@ impl Monitor {
                     .gap(px(6.))
                     .child(
                         Button::new("cpu-sort")
-                            .accessibility_label("Sort by CPU")
+                            .accessibility_label(self.t("Sort by CPU"))
                             .size(px(20.))
                             .rounded_full()
                             .child(
-                                self.badge(
+                                self.badge_with_description(
                                     "▦",
                                     if !self.by_memory {
                                         0x182130
                                     } else {
                                         self.muted()
                                     },
+                                    self.t("Sort by CPU"),
                                 )
                                 .bg(rgb(if !self.by_memory {
                                     self.accent()
@@ -504,17 +515,18 @@ impl Monitor {
                     )
                     .child(
                         Button::new("mem-sort")
-                            .accessibility_label("Sort by memory")
+                            .accessibility_label(self.t("Sort by memory"))
                             .size(px(20.))
                             .rounded_full()
                             .child(
-                                self.badge(
+                                self.badge_with_description(
                                     "▥",
                                     if self.by_memory {
                                         0x182130
                                     } else {
                                         self.muted()
                                     },
+                                    self.t("Sort by memory"),
                                 )
                                 .bg(rgb(if self.by_memory {
                                     self.accent()
@@ -590,9 +602,27 @@ impl Render for Monitor {
         let muted = self.muted();
         let accent = self.accent();
         let memory_color = match self.data.pressure {
-            Some(2) => 0xffc857,
-            Some(4) => 0xff6970,
-            _ => 0x4dcc7c,
+            Some(2) => {
+                if self.settings.light {
+                    0xb26a00
+                } else {
+                    0xf0b54a
+                }
+            }
+            Some(4) => {
+                if self.settings.light {
+                    0xd23f31
+                } else {
+                    0xff6b5e
+                }
+            }
+            _ => {
+                if self.settings.light {
+                    0x1c9a50
+                } else {
+                    0x4fd17f
+                }
+            }
         };
         let memory_fraction = self.data.memory as f32 / self.data.total_memory.max(1) as f32;
         let core_height = if wide {
@@ -601,7 +631,7 @@ impl Render for Monitor {
             (f32::from(size.height) - 390.).clamp(50., 160.)
         };
         let core_count = self.data.cores.len().max(1) as f32;
-        let gpu_width = if wide { 42. } else { 25. };
+        let gpu_width = if wide { 78. } else { 64. };
         let available = (f32::from(size.width) * if wide { 0.52 } else { 1.0 }
             - 30.
             - if self.data.gpu_usage.is_some() {
@@ -617,8 +647,9 @@ impl Render for Monitor {
             .flex_col()
             .w_full()
             .min_h_full()
-            .p(px(15.))
-            .gap(px(12.))
+            .px(px(15.))
+            .py(px(13.))
+            .gap(px(15.))
             .rounded(px(chrome::RADIUS - 1.))
             .bg(if self.settings.light {
                 rgba(0xf1f4f7ed)
@@ -634,6 +665,9 @@ impl Render for Monitor {
             .text_size(px(12.));
         panel = panel.child(
             div()
+                .id("metrics-header")
+                .relative()
+                .h(px(28.))
                 .flex()
                 .items_center()
                 .justify_between()
@@ -651,9 +685,46 @@ impl Render for Monitor {
                     .text_size(px(17.))
                     .font_weight(FontWeight::SEMIBOLD),
                 )
+                .when(
+                    self.settings.cores && !compact && self.data.gpu_usage.is_some(),
+                    |header| {
+                        header.child(
+                            div()
+                                .absolute()
+                                .left(px((core_count * (core_width + core_gap) + 10.)
+                                    .min(f32::from(size.width) - 160.)
+                                    .max(70.)))
+                                .top(px(0.))
+                                .h(px(28.))
+                                .flex()
+                                .items_center()
+                                .child(
+                                    self.figure(
+                                        "▧",
+                                        self.data
+                                            .gpu_usage
+                                            .map(|v| format!("{v:.0} %"))
+                                            .unwrap_or_else(|| "—".into()),
+                                        self.gpu_color(),
+                                    )
+                                    .text_size(px(17.))
+                                    .font_weight(FontWeight::SEMIBOLD),
+                                ),
+                        )
+                    },
+                )
                 .child(
                     Button::new("settings")
-                        .label(if self.controls { "Done" } else { "•••" })
+                        .label(if self.controls {
+                            self.t("Done")
+                        } else {
+                            "•••".into()
+                        })
+                        .accessibility_label(self.t(if self.controls {
+                            "Done"
+                        } else {
+                            "Settings"
+                        }))
                         .small()
                         .ghost()
                         .on_click(cx.listener(|this, _, _, cx| {
@@ -663,20 +734,42 @@ impl Render for Monitor {
                 ),
         );
         if self.controls {
+            panel =
+                panel.child(
+                    div()
+                        .flex()
+                        .flex_wrap()
+                        .items_center()
+                        .gap(px(6.))
+                        .child(self.t("Language"))
+                        .children(i18n::Language::ALL.into_iter().enumerate().map(
+                            |(i, language)| {
+                                Button::new(("language", i))
+                                    .label(self.t(language.label()))
+                                    .small()
+                                    .selected(self.settings.language == language)
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        this.settings.language = language;
+                                        this.save();
+                                        cx.notify();
+                                    }))
+                            },
+                        )),
+                );
             panel = panel.child(
                 div()
                     .flex()
                     .gap(px(8.))
                     .child(
                         Button::new("hide")
-                            .label("Minimize")
+                            .label(self.t("Minimize"))
                             .small()
                             .ghost()
                             .on_click(|_, window, _| window.minimize_window()),
                     )
                     .child(
                         Button::new("quit")
-                            .label("Quit")
+                            .label(self.t("Quit"))
                             .small()
                             .ghost()
                             .on_click(|_, _, cx| cx.quit()),
@@ -700,7 +793,7 @@ impl Render for Monitor {
                         .enumerate()
                         .map(|(i, (label, on))| {
                             Button::new(("toggle", i))
-                                .label(format!("{} {}", if on { "●" } else { "○" }, label))
+                                .label(format!("{} {}", if on { "●" } else { "○" }, self.t(label)))
                                 .selected(on)
                                 .small()
                                 .ghost()
@@ -720,7 +813,7 @@ impl Render for Monitor {
                     )
                     .child(
                         Button::new("palette")
-                            .label("Sea / Graphite / Warm")
+                            .label(self.t("Sea / Graphite / Warm"))
                             .small()
                             .ghost()
                             .on_click(cx.listener(|this, _, _, cx| {
@@ -752,23 +845,30 @@ impl Render for Monitor {
                                 self.core_color(c.group),
                             ))
                             .when(core_width >= 17., |el| {
-                                el.child(div().text_size(px(10.)).child(format!("{:.0}", c.usage)))
-                                    .child(div().text_size(px(8.5)).text_color(rgb(muted)).child(
+                                el.child(
+                                    div()
+                                        .text_size(px(10.))
+                                        .font_weight(FontWeight::SEMIBOLD)
+                                        .child(format!("{:.0}", c.usage)),
+                                )
+                                .child(
+                                    div().text_size(px(8.5)).text_color(rgb(muted)).child(
                                         if c.mhz == 0 {
                                             "—".into()
                                         } else {
                                             format!("{:.1}", c.mhz as f32 / 1000.)
                                         },
-                                    ))
+                                    ),
+                                )
                             })
                             .id(("core", i))
                             .tooltip({
-                                let detail = format!(
+                                let detail = self.t(&format!(
                                     "Core {} · {:.1}% · reported {} MHz",
                                     c.id + 1,
                                     c.usage,
                                     c.mhz
-                                );
+                                ));
                                 move |_, cx| chrome::tooltip(detail.clone(), cx)
                             })
                     }))
@@ -824,14 +924,15 @@ impl Render for Monitor {
                                         gb(bytes)
                                     )
                                 })
-                                .unwrap_or_else(|| "压缩内存：未开放".into()),
+                                .map(|text| self.t(&text))
+                                .unwrap_or_else(|| self.t("Compressed memory unavailable")),
                         )
                         .child(format!(
                             "{} {} / {} GB",
                             if self.data.swap_label.is_empty() {
-                                "Swap"
+                                self.t("Swap")
                             } else {
-                                self.data.swap_label
+                                self.t(&self.data.swap_label)
                             },
                             gb(self.data.swap),
                             gb(self.data.total_swap)
@@ -853,7 +954,8 @@ impl Render for Monitor {
                 .temperature
                 .as_ref()
                 .map(|(label, _)| label.clone())
-                .unwrap_or_else(|| "Temperature unavailable".into());
+                .map(|text| self.t(&text))
+                .unwrap_or_else(|| self.t("Temperature unavailable"));
             let mut gpu = self
                 .data
                 .gpu_usage
@@ -868,7 +970,7 @@ impl Render for Monitor {
                         .flex()
                         .justify_between()
                         .text_color(rgb(muted))
-                        .child(self.figure("▧", gpu, 0xb294ff))
+                        .child(self.figure("▧", gpu, self.gpu_color()))
                         .child(
                             self.figure(
                                 "ϟ",
@@ -876,7 +978,7 @@ impl Render for Monitor {
                                     .gpu_power
                                     .map(|watts| format!("{watts:.1} W"))
                                     .unwrap_or_else(|| "不可用".into()),
-                                0xb294ff,
+                                self.gpu_color(),
                             ),
                         ),
                 )
@@ -941,7 +1043,7 @@ impl Render for Monitor {
             panel = panel.child(
                 div()
                     .text_color(rgb(muted))
-                    .child("Reading system metrics…"),
+                    .child(self.t("Reading system metrics…")),
             );
         }
         if let Some(name) = &self.selected {
@@ -952,11 +1054,12 @@ impl Render for Monitor {
                         .rounded(px(10.))
                         .bg(rgb(self.track()))
                         .child(format!(
-                            "{}   {:.1}% CPU   {} GB   {} processes",
+                            "{}   {:.1}% CPU   {} GB   {} {}",
                             p.name,
                             p.cpu,
                             gb(p.memory),
-                            p.pids.len()
+                            p.pids.len(),
+                            self.t("processes")
                         )),
                 );
             }
@@ -966,7 +1069,7 @@ impl Render for Monitor {
                 .data
                 .capabilities
                 .iter()
-                .map(|(name, detail)| format!("{name}：{detail}"))
+                .map(|(name, detail)| self.t(&format!("{name}: {detail}")))
                 .collect::<Vec<_>>();
             status.push(
                 self.data
@@ -974,16 +1077,16 @@ impl Render for Monitor {
                     .clone()
                     .unwrap_or_else(|| "GPU 等待采样".into()),
             );
-            let status = status.join("\n");
+            let status = self.t(&status.join("\n"));
             panel = panel.child(
                 Button::new("collection-status")
-                    .label("采集状态")
+                    .label(self.t("Collection status"))
                     .small()
                     .tooltip(move |_, cx| chrome::tooltip(status.clone(), cx)),
             );
             panel = panel.child(
                 Button::new("check-update")
-                    .label("Check for updates")
+                    .label(self.t("Check for updates"))
                     .small()
                     .ghost()
                     .on_click(cx.listener(|this, _, _, cx| {
@@ -997,14 +1100,15 @@ impl Render for Monitor {
                 div().text_size(px(10.5)).text_color(rgb(muted)).child(
                     self.update_message
                         .clone()
-                        .unwrap_or_else(|| "Updates: manual download · checks daily".into()),
+                        .map(|text| self.t(&text))
+                        .unwrap_or_else(|| self.t("Updates: manual download · checks daily")),
                 ),
             );
             if let Some(version) = &self.update_version {
                 if let Ok(url) = updater::release_page(version) {
                     panel = panel.child(
                         Button::new("download-update")
-                            .label("Open release")
+                            .label(self.t("Open release"))
                             .small()
                             .ghost()
                             .on_click(move |_, _, cx| cx.open_url(&url)),
@@ -1013,10 +1117,10 @@ impl Render for Monitor {
             }
         }
         if let Some(error) = &self.data.error {
-            panel = panel.child(error.clone());
+            panel = panel.child(self.t(error));
         }
         if let Some(error) = &self.error {
-            panel = panel.child(format!("Could not save settings: {error}"));
+            panel = panel.child(format!("{} {error}", self.t("Could not save settings:")));
         }
         let content = div()
             .id("panel-scroll")

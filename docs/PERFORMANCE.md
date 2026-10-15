@@ -37,3 +37,15 @@ Local Ubuntu 26.04 / Intel DRM fallback / 12 logical CPUs, release build, motion
 Measured incremental GPU cost is approximately 0.4–0.5 percentage points of one core, or 0.033–0.042 points of this 12-thread machine, with about 0.1–0.5 MiB RSS difference. This is a small live-desktop comparison, not a guarantee for other drivers. The previous/revised total-process difference is small; do not claim a dramatic total CPU improvement. Visible use still exceeds the original under-1%-of-one-core target.
 
 Linux discovery groups aliased DRM descriptors by client identity, reads one live descriptor per client, retains aliases for process exit/fd reuse, and parses only necessary fields. NVML caches device/max-clock discovery for 30 seconds, temperature for five seconds and detailed reads for the selected GPU. Windows uses one persistent PDH query and reuses a scratch buffer capped at one MiB retained. These Windows/NVIDIA changes are source-level cost controls, not native performance measurements. Sampling pauses on native hidden/minimized visibility notifications; no GPU polling timer runs independently of the sampler.
+
+## UI and localization revision
+
+Same host, native X11, GPU enabled, motion disabled, one-second sampling, five-second warmup and twenty-second measurements. Baseline is the existing optimized pre-localization release; final measurement uses the release rebuilt from the final UI/localization source.
+
+| Build | CPU, one core | CPU, whole machine (12 logical CPUs) | RSS |
+| --- | ---: | ---: | ---: |
+| Before localization/UI audit | 2.90% | 0.242% | 119.62 MiB |
+| Initial localization/UI build | 2.95% | 0.246% | 118.76 MiB |
+| Final localization/UI build | 2.80% | 0.233% | 118.54 MiB |
+
+These short runs show no material added cost; they do not establish a speedup or meet the original under-1%-of-one-core target. One CPU tick over twenty seconds is 0.05 percentage points of one core. The embedded catalog and system locale initialize once, language changes only notify the view and persist settings, and no polling task, collector, network request or animation loop was added. macOS/Windows performance and every-locale hardware/font combinations remain unmeasured. Raw records are ignored in `docs/evidence/{before-i18n,with-i18n,final-ui-i18n}.json`.

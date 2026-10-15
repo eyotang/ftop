@@ -933,6 +933,7 @@ fn main() {
         .with_assets(gpui_kit::assets::Assets)
         .run(|cx| {
             gpui_kit::init(cx);
+            cx.set_app_identity("ftop", "ftop");
             cx.on_window_closed(|cx, _| {
                 if cx.windows().is_empty() {
                     cx.quit();
@@ -954,6 +955,7 @@ fn main() {
                 },
                 cx,
                 |window, cx| {
+                    window.set_app_id("ftop");
                     window.set_window_title("ftop");
                     cx.new(|cx| Monitor::new(window, cx))
                 },

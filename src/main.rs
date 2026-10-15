@@ -289,6 +289,7 @@ impl Monitor {
             .text_size(px(12.))
             .child(div().id(SharedString::from(format!("badge-{glyph}"))).size(px(20.)).flex().items_center().justify_center().tooltip(move |_, cx| chrome::tooltip(description.clone(), cx)).child(svg().data(format!(r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><g fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">{}</g></svg>"#, match glyph {
                 "▦" | "◌" => "<rect x='6' y='6' width='12' height='12' rx='2'/><path d='M9 2v4m6-4v4M9 18v4m6-4v4M2 9h4m-4 6h4m12-6h4m-4 6h4'/>",
+                "▧" => "<rect x='2' y='6' width='19' height='12' rx='2'/><circle cx='10' cy='12' r='3'/><path d='M16 10h2m-2 4h2M6 18v3m4-3v3m4-3v3M2 4v16'/>",
                 "▥" => "<rect x='3' y='7' width='18' height='10' rx='2'/><path d='M7 10v4m5-4v4m5-4v4M7 17v3m5-3v3m5-3v3'/>",
                 "↓" => "<path d='M12 3v17m-6-6 6 6 6-6'/>",
                 "↑" => "<path d='M12 21V4m-6 6 6-6 6 6'/>",
@@ -350,7 +351,11 @@ impl Monitor {
             .child(
                 div()
                     .absolute()
-                    .top(px(-18.))
+                    .top(px(-25.))
+                    .flex()
+                    .items_center()
+                    .gap(px(3.))
+                    .child(self.badge("▧", 0xb294ff))
                     .text_size(px(10.))
                     .text_color(rgb(0xb294ff))
                     .child(

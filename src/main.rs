@@ -221,58 +221,59 @@ impl Monitor {
         }
     }
     fn badge(&self, glyph: &str, color: u32) -> Div {
-        let description = match glyph {
-            "▦" => format!("CPU · 处理器总占用 {:.0}%", self.data.cpu),
-            "◌" => "CPU · 进程处理器占用".into(),
-            "▥" => format!(
-                "内存 · 已用 {} / 总计 {} GB · {}",
-                gb(self.data.memory),
-                gb(self.data.total_memory),
-                self.data
-                    .memory_pressure_info
-                    .as_deref()
-                    .unwrap_or("压力传感器未开放")
-            ),
-            "▧" => format!(
-                "GPU · 图形处理器占用 {} · GPU 内存 {} · 温度 {} · 频率 {} · {}",
-                self.data
-                    .gpu_usage
-                    .map(|v| format!("{v:.0}%"))
-                    .unwrap_or_else(|| "不可用".into()),
-                self.data
-                    .gpu_memory
-                    .map(|v| format!("{} GB", gb(v)))
-                    .unwrap_or_else(|| "不可用".into()),
-                self.data
-                    .gpu_temperature
-                    .map(|v| format!("{v:.0}°C"))
-                    .unwrap_or_else(|| "驱动未开放".into()),
-                self.data
-                    .gpu_frequency
-                    .map(|(current, maximum)| format!("{current}/{maximum} MHz"))
-                    .unwrap_or_else(|| "驱动未开放".into()),
-                self.data.gpu_info.as_deref().unwrap_or("等待 GPU 采样")
-            ),
-            "↓" => "网络 · 下载速率".into(),
-            "↑" => "网络 · 上传速率".into(),
-            "ϟ" => format!(
-                "GPU 功耗（W）· {}",
-                self.data
-                    .gpu_info
-                    .as_deref()
-                    .unwrap_or("驱动未开放功率传感器")
-            ),
-            "⌂" => self.data.power_label.clone().unwrap_or_else(|| {
-                "电源驱动未提供当前功率（不以 CPU/GPU 功率冒充整机功率）".into()
-            }),
-            "♧" => self
-                .data
-                .temperature
-                .as_ref()
-                .map(|(label, _)| format!("温度 · {label}（°C）"))
-                .unwrap_or_else(|| "系统/驱动未开放温度传感器".into()),
-            _ => "系统指标".into(),
-        };
+        let description =
+            match glyph {
+                "▦" => format!("CPU · 处理器总占用 {:.0}%", self.data.cpu),
+                "◌" => "CPU · 进程处理器占用".into(),
+                "▥" => format!(
+                    "内存 · 已用 {} / 总计 {} GB · {}",
+                    gb(self.data.memory),
+                    gb(self.data.total_memory),
+                    self.data
+                        .memory_pressure_info
+                        .as_deref()
+                        .unwrap_or("压力传感器未开放")
+                ),
+                "▧" => format!(
+                    "GPU · 图形处理器占用 {} · GPU 内存 {} · 温度 {} · 频率 {} · {}",
+                    self.data
+                        .gpu_usage
+                        .map(|v| format!("{v:.0}%"))
+                        .unwrap_or_else(|| "不可用".into()),
+                    self.data
+                        .gpu_memory
+                        .map(|v| format!("{} GB", gb(v)))
+                        .unwrap_or_else(|| "不可用".into()),
+                    self.data
+                        .gpu_temperature
+                        .map(|v| format!("{v:.0}°C"))
+                        .unwrap_or_else(|| "当前接口无读数".into()),
+                    self.data
+                        .gpu_frequency
+                        .map(|(current, maximum)| format!("{current}/{maximum} MHz"))
+                        .unwrap_or_else(|| "当前接口无读数".into()),
+                    self.data.gpu_info.as_deref().unwrap_or("等待 GPU 采样")
+                ),
+                "↓" => "网络 · 下载速率".into(),
+                "↑" => "网络 · 上传速率".into(),
+                "ϟ" => format!(
+                    "GPU 功耗（W）· {}",
+                    self.data
+                        .gpu_info
+                        .as_deref()
+                        .unwrap_or("当前接口无读数功率传感器")
+                ),
+                "⌂" => self.data.power_label.clone().unwrap_or_else(|| {
+                    "当前接口未获取到功率（不以 CPU/GPU 功率冒充整机功率）".into()
+                }),
+                "♧" => self
+                    .data
+                    .temperature
+                    .as_ref()
+                    .map(|(label, _)| format!("温度 · {label}（°C）"))
+                    .unwrap_or_else(|| "系统/当前接口无读数温度传感器".into()),
+                _ => "系统指标".into(),
+            };
         div()
             .flex()
             .items_center()
@@ -827,11 +828,14 @@ impl Render for Monitor {
                 .as_ref()
                 .map(|(label, _)| label.clone())
                 .unwrap_or_else(|| "Temperature unavailable".into());
-            let gpu = self
+            let mut gpu = self
                 .data
                 .gpu_usage
                 .map(|usage| format!("{usage:.0} %"))
                 .unwrap_or_else(|| "不可用".into());
+            if let Some(bytes) = self.data.gpu_memory {
+                gpu.push_str(&format!(" · {} GB", gb(bytes)));
+            }
             readings = readings
                 .child(
                     div()

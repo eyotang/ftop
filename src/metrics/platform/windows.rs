@@ -202,13 +202,13 @@ impl Backend {
             // Keep WDDM's cross-vendor busiest-engine total when available.
             snapshot.gpu_usage = snapshot.gpu_usage.or(gpu.gpu_usage);
             snapshot.gpu_memory = snapshot.gpu_memory.or(gpu.gpu_memory);
-            snapshot.gpu_power = gpu.gpu_power;
+            snapshot.gpu_power = gpu.gpu_power.or(snapshot.gpu_power);
             snapshot.gpu_frequency = gpu.gpu_frequency;
             snapshot.gpu_temperature = gpu.gpu_temperature;
             if snapshot.temperature.is_none() {
                 snapshot.temperature = gpu.gpu_temperature.map(|v| ("NVIDIA GPU 温度".into(), v));
             }
-            if snapshot.gpu_power.is_some() {
+            if gpu.gpu_power.is_some() {
                 snapshot.gpu_info =
                     Some("WDDM/PDH 占用与显存；NVIDIA NVML 功耗/频率/温度（NVIDIA 最忙卡）".into());
             }
@@ -231,10 +231,12 @@ impl Backend {
             snapshot.power = Some((battery.rate as i32).unsigned_abs() as f32 / 1000.);
             snapshot.power_label = Some("电池放电功率（Windows 电池驱动）".into());
         }
-        snapshot.memory_pressure_info = Some(format!(
-            "Windows 物理内存负载 {}%（不是 macOS 内存压力等级）",
-            memory.load
-        ));
+        if snapshot.total_memory > 0 {
+            snapshot.memory_pressure_info = Some(format!(
+                "Windows 物理内存负载 {}%（不是 macOS 内存压力等级）",
+                memory.load
+            ));
+        }
         snapshot.capabilities.extend([
             (
                 "CPU 频率".into(),
@@ -246,7 +248,7 @@ impl Backend {
             ),
             (
                 "整机功耗".into(),
-                "电池放电功率可读时显示；接通电源或无电池时无通用整机实时功率；GPU 功率取决于驱动"
+                "优先电池放电功率，否则尝试 Energy Meter 的 CPU/APU/GPU 命名域；局部功耗不作为整机总功耗"
                     .into(),
             ),
             (

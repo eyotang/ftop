@@ -38,6 +38,7 @@ pub struct Counters {
     shared: Handle,
     thermal: Handle,
     frequency: Handle,
+    energy: Handle,
 }
 impl Counters {
     pub fn new() -> Self {
@@ -48,6 +49,7 @@ impl Counters {
             shared: 0,
             thermal: 0,
             frequency: 0,
+            energy: 0,
         };
         // SAFETY: Valid initialized handle output; all handles belong to this query.
         unsafe {
@@ -55,6 +57,7 @@ impl Counters {
                 return this;
             }
             for (path, output) in [
+                (r"\Energy Meter(*)\Power", &mut this.energy),
                 (r"\GPU Engine(*)\Utilization Percentage", &mut this.engine),
                 (
                     r"\GPU Adapter Memory(*)\Dedicated Usage",
@@ -158,6 +161,18 @@ impl Counters {
             }
             .into(),
         );
+        let energy = self.values(self.energy);
+        if let Some((name, watts)) = power_domain(&energy, false) {
+            s.power = Some(watts);
+            s.power_label = Some(format!("Windows Energy Meter · {name}（非整机）"));
+        }
+        if let Some((name, watts)) = power_domain(&energy, true) {
+            s.gpu_power = Some(watts);
+            s.gpu_info = Some(format!(
+                "{}；GPU 功耗来自 Energy Meter {name}",
+                s.gpu_info.as_deref().unwrap_or("WDDM")
+            ));
+        }
         if s.temperature.is_none() {
             s.temperature = self
                 .values(self.thermal)
@@ -181,6 +196,27 @@ impl Counters {
             }
         }
     }
+}
+fn power_domain(values: &[(String, f64)], gpu: bool) -> Option<(String, f32)> {
+    // Formatted Energy Meter Power uses mW. Select one named domain, never sum
+    // overlapping package/core/APU rails or silently call their sum wall power.
+    values
+        .iter()
+        .filter(|(name, v)| {
+            let name = name.to_ascii_lowercase();
+            let matches = if gpu {
+                name.contains("gpu") || name.contains("gfx") || name.contains("graphics")
+            } else {
+                name.contains("cpu")
+                    || name.contains("apu")
+                    || name.contains("socket")
+                    || name.contains("_pkg")
+                    || name.contains("package")
+            };
+            matches && v.is_finite() && *v >= 0. && *v < 1e7
+        })
+        .max_by(|a, b| a.1.total_cmp(&b.1))
+        .map(|(name, v)| (name.clone(), (*v / 1000.) as f32))
 }
 fn busiest_engine(values: Vec<(String, f64)>) -> Option<f32> {
     let mut engines = HashMap::<String, f64>::new();
@@ -212,7 +248,21 @@ impl Drop for Counters {
 }
 #[cfg(test)]
 mod tests {
-    use super::busiest_engine;
+    use super::{busiest_engine, power_domain};
+    #[test]
+    fn power_domains_do_not_double_count_package_and_apu() {
+        let values = vec![
+            ("RAPL_Package0_PKG".into(), 50000.),
+            ("CPU Power".into(), 40000.),
+            ("GPU Power".into(), 25000.),
+        ];
+        assert_eq!(
+            power_domain(&values, false),
+            Some(("RAPL_Package0_PKG".into(), 50.))
+        );
+        assert_eq!(power_domain(&values, true), Some(("GPU Power".into(), 25.)));
+        assert_eq!(power_domain(&[], false), None);
+    }
     #[test]
     fn aggregate_process_shares_without_summing_engines() {
         assert_eq!(

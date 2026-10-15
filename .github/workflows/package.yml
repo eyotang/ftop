@@ -59,6 +59,7 @@ jobs:
           tag="v${version}"
           if gh release view "$tag" --json isDraft --jq '.isDraft' > /tmp/is-draft; then
             test "$(cat /tmp/is-draft)" = true
+            gh release edit "$tag" --target "$GITHUB_SHA" --notes-file "docs/releases/v${version}.md"
           else
             gh release create "$tag" --draft --target "$GITHUB_SHA" --title "ftop $tag" --notes-file "docs/releases/v${version}.md"
           fi

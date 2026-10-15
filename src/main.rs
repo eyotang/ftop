@@ -1,3 +1,8 @@
+#![cfg_attr(
+    all(target_os = "windows", not(debug_assertions)),
+    windows_subsystem = "windows"
+)]
+
 mod chrome;
 mod metrics;
 mod sampling_gate;
@@ -216,6 +221,32 @@ impl Monitor {
         }
     }
     fn badge(&self, glyph: &str, color: u32) -> Div {
+        let description = match glyph {
+            "▦" => format!("CPU · 处理器总占用 {:.0}%", self.data.cpu),
+            "◌" => "CPU · 进程处理器占用".into(),
+            "▥" => format!(
+                "内存 · 已用 {} / 总计 {} GB",
+                gb(self.data.memory),
+                gb(self.data.total_memory)
+            ),
+            "▧" => format!(
+                "GPU · 图形处理器占用 {} · 显存 {}",
+                self.data
+                    .gpu_usage
+                    .map(|v| format!("{v:.0}%"))
+                    .unwrap_or_else(|| "不可用".into()),
+                self.data
+                    .gpu_memory
+                    .map(|v| format!("{} GB", gb(v)))
+                    .unwrap_or_else(|| "不可用".into())
+            ),
+            "↓" => "网络 · 下载速率".into(),
+            "↑" => "网络 · 上传速率".into(),
+            "ϟ" => "GPU · 图形处理器功耗（W）".into(),
+            "⌂" => "整机功耗（W）".into(),
+            "♧" => "温度 · 传感器读数（°C）".into(),
+            _ => "系统指标".into(),
+        };
         div()
             .flex()
             .items_center()
@@ -225,7 +256,7 @@ impl Monitor {
             .bg(rgb(self.track()))
             .text_color(rgb(color))
             .text_size(px(12.))
-            .child(svg().data(format!(r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><g fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">{}</g></svg>"#, match glyph {
+            .child(div().id(SharedString::from(format!("badge-{glyph}"))).size(px(20.)).flex().items_center().justify_center().tooltip(move |_, cx| chrome::tooltip(description.clone(), cx)).child(svg().data(format!(r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><g fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">{}</g></svg>"#, match glyph {
                 "▦" | "◌" => "<rect x='6' y='6' width='12' height='12' rx='2'/><path d='M9 2v4m6-4v4M9 18v4m6-4v4M2 9h4m-4 6h4m12-6h4m-4 6h4'/>",
                 "▥" => "<rect x='3' y='7' width='18' height='10' rx='2'/><path d='M7 10v4m5-4v4m5-4v4M7 17v3m5-3v3m5-3v3'/>",
                 "↓" => "<path d='M12 3v17m-6-6 6 6 6-6'/>",
@@ -234,7 +265,7 @@ impl Monitor {
                 "⌂" => "<path d='M5 6h14v11H5zM2 20h20'/>",
                 "♧" => "<path d='M9 14V5a3 3 0 0 1 6 0v9a5 5 0 1 1-6 0zM12 8v9'/>",
                 _ => "<path d='m12 3 9 5-9 5-9-5zm-9 9 9 5 9-5m-18 5 9 5 9-5'/>",
-            }).as_bytes()).size(px(11.)).text_color(rgb(color)))
+            }).as_bytes()).size(px(11.)).text_color(rgb(color))))
     }
     fn bar(
         &self,
@@ -279,6 +310,14 @@ impl Monitor {
             .flex_col()
             .items_center()
             .gap(px(3.))
+            .child(
+                div().text_size(px(10.)).text_color(rgb(0xb294ff)).child(
+                    self.data
+                        .gpu_usage
+                        .map(|v| format!("{v:.0}%"))
+                        .unwrap_or_else(|| "—".into()),
+                ),
+            )
             .child(self.bar(
                 self.data.gpu_usage.unwrap_or(0.),
                 frequency,
@@ -287,22 +326,16 @@ impl Monitor {
                 0xb294ff,
             ))
             .when(numbered, |column| {
-                column
-                    .child(
-                        div()
-                            .text_size(px(10.))
-                            .child(format!("{:.0}", self.data.gpu_usage.unwrap_or(0.))),
-                    )
-                    .child(
-                        div()
-                            .text_size(px(8.5))
-                            .text_color(rgb(self.muted()))
-                            .child(if frequency.0 > 0 {
-                                format!("{:.1}", frequency.0 as f32 / 1000.)
-                            } else {
-                                "—".into()
-                            }),
-                    )
+                column.child(
+                    div()
+                        .text_size(px(8.5))
+                        .text_color(rgb(self.muted()))
+                        .child(if frequency.0 > 0 {
+                            format!("{:.1}", frequency.0 as f32 / 1000.)
+                        } else {
+                            "—".into()
+                        }),
+                )
             })
     }
     fn gauge_badge(&self, glyph: &str, color: u32, progress: f32) -> Div {
@@ -761,10 +794,9 @@ impl Render for Monitor {
                 .unwrap_or_else(|| "Temperature unavailable".into());
             let gpu = self
                 .data
-                .gpu_memory
-                .map(|bytes| format!("{} GB", gb(bytes)))
-                .or_else(|| self.data.gpu_usage.map(|usage| format!("{usage:.0} %")))
-                .unwrap_or_else(|| "—".into());
+                .gpu_usage
+                .map(|usage| format!("{usage:.0} %"))
+                .unwrap_or_else(|| "— %".into());
             readings = readings
                 .child(
                     div()

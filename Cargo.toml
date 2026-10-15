@@ -1,0 +1,22 @@
+[package]
+name = "ftop"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "A quiet, native cross-platform system monitor built with GPUI Kit"
+
+[dependencies]
+gpui-kit = "=0.7.3"
+sysinfo = "0.37"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+dirs = "6"
+
+[profile.release]
+lto = "thin"
+strip = true
+
+[dependencies.reqwest]
+version = "0.12"
+default-features = false
+features = ["blocking", "rustls-tls", "json"]

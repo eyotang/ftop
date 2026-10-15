@@ -11,6 +11,7 @@ Measured on the local Ubuntu 26.04 x86_64, 12 logical CPUs, X11/XWayland, a visi
 | Debug, event-driven drawing + restricted sysinfo sampling | 10.533% | 0.878% | 154.70 MiB |
 | Release, event-driven drawing + native Linux collector | 2.467% | 0.206% | 116.09 MiB |
 | Release, latest visible canvas/procfs revision | 2.133% | 0.178% | 115.76 MiB |
+| Release, visible repeat (3572e31) | 3.667% | 0.306% | 116.05 MiB |
 | Release, latest X11 minimized window (3572e31) | 0.467% | 0.039% | 115.62 MiB |
 
 These runs are separate snapshots on a live desktop, not simultaneous controlled laboratory tests. Visible-window performance is materially better but **still exceeds the upstream CPU and memory targets**. Minimized-window measurements do not establish visible-window acceptance. Do not describe it as matching the original benchmark.

@@ -5,7 +5,7 @@ Sources are sampled off the UI thread. A successful build does not prove availab
 | Metric | macOS | Windows | Ubuntu |
 | --- | --- | --- | --- |
 | CPU/process usage | Native sysinfo counters | Native sysinfo counters | procfs tick deltas, root processes only |
-| CPU frequency | Upstream IOReport bridge, supported hardware | PDH driver-reported Processor Frequency, not a guaranteed instantaneous effective clock | cpufreq scaling_cur_freq, driver-reported |
+| CPU frequency | Upstream IOReport bridge, supported hardware | PDH Processor Frequency with ProcessorPowerInformation fallback/max; native CPU-set performance classes; not a guaranteed instantaneous effective clock | cpufreq scaling_cur_freq, driver-reported |
 | Physical memory | Mach original used-memory formula | GlobalMemoryStatusEx | MemTotal minus MemAvailable |
 | Swap / commit | vm.swapusage | GetPerformanceInfo; explicitly labeled Commit | procfs SwapTotal minus SwapFree |
 | Compression | Mach compressor physical pages | No supported public compression-store reader implemented; explicitly unavailable | Zswap compressed pool plus Zram compressed data, if exposed |

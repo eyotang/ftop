@@ -36,6 +36,13 @@ struct PerformanceInfo {
 #[link(name = "kernel32")]
 unsafe extern "system" {
     fn GlobalMemoryStatusEx(status: *mut MemoryStatus) -> i32;
+    fn GetSystemCpuSetInformation(
+        buffer: *mut std::ffi::c_void,
+        size: u32,
+        required: *mut u32,
+        process: isize,
+        flags: u32,
+    ) -> i32;
 }
 #[link(name = "psapi")]
 unsafe extern "system" {
@@ -66,8 +73,51 @@ unsafe extern "system" {
         output_size: u32,
     ) -> i32;
 }
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+struct ProcessorPower {
+    number: u32,
+    max_mhz: u32,
+    current_mhz: u32,
+    limit_mhz: u32,
+    max_idle: u32,
+    current_idle: u32,
+}
+fn cpu_classes() -> std::collections::HashMap<u32, u8> {
+    let mut result = std::collections::HashMap::new();
+    // SAFETY: first request obtains required byte count; allocation is aligned,
+    // variable-size records are parsed only after bounds/type checks.
+    unsafe {
+        let mut needed = 0;
+        let _ = GetSystemCpuSetInformation(std::ptr::null_mut(), 0, &mut needed, 0, 0);
+        if needed == 0 || needed > 1024 * 1024 {
+            return result;
+        }
+        let mut buffer = vec![0u64; (needed as usize).div_ceil(8)];
+        if GetSystemCpuSetInformation(buffer.as_mut_ptr().cast(), needed, &mut needed, 0, 0) == 0 {
+            return result;
+        }
+        let bytes = std::slice::from_raw_parts(buffer.as_ptr().cast::<u8>(), needed as usize);
+        let mut offset = 0;
+        while offset + 8 <= bytes.len() {
+            let record = &bytes[offset..];
+            let size = u32::from_le_bytes(record[..4].try_into().unwrap()) as usize;
+            let kind = u32::from_le_bytes(record[4..8].try_into().unwrap());
+            if size < 8 || offset + size > bytes.len() {
+                break;
+            }
+            if kind == 0 && size >= 32 {
+                let group = u16::from_le_bytes(record[12..14].try_into().unwrap()) as u32;
+                result.insert(group * 64 + u32::from(record[14]), record[18]);
+            }
+            offset += size;
+        }
+    }
+    result
+}
 pub struct Backend {
     portable: Portable,
+    classes: std::collections::HashMap<u32, u8>,
     gpu: super::windows_gpu::Counters,
     nvidia: Option<super::nvidia::Nvidia>,
 }
@@ -75,6 +125,7 @@ impl Backend {
     pub fn new() -> Self {
         Self {
             portable: Portable::new(),
+            classes: cpu_classes(),
             gpu: super::windows_gpu::Counters::new(),
             nvidia: super::nvidia::Nvidia::new(),
         }
@@ -114,6 +165,39 @@ impl Backend {
         }
         snapshot.swap_label = "Commit";
         self.gpu.sample(&mut snapshot);
+        let mut power = vec![ProcessorPower::default(); snapshot.cores.len()];
+        // SAFETY: contiguous repr(C) processor array with exact size.
+        if !power.is_empty()
+            && unsafe {
+                CallNtPowerInformation(
+                    11,
+                    std::ptr::null(),
+                    0,
+                    power.as_mut_ptr().cast(),
+                    std::mem::size_of_val(power.as_slice()) as u32,
+                )
+            } == 0
+        {
+            for info in power {
+                if let Some(core) = snapshot.cores.iter_mut().find(|c| c.id == info.number) {
+                    core.max_mhz = u64::from(info.max_mhz);
+                    if core.mhz == 0 {
+                        core.mhz = u64::from(info.current_mhz);
+                    }
+                }
+            }
+        }
+        let mut classes = self.classes.values().copied().collect::<Vec<_>>();
+        classes.sort_unstable_by(|a, b| b.cmp(a));
+        classes.dedup();
+        for cpu in &mut snapshot.cores {
+            cpu.group = self
+                .classes
+                .get(&cpu.id)
+                .and_then(|class| classes.iter().position(|v| v == class))
+                .unwrap_or(0);
+        }
+        snapshot.cores.sort_by_key(|c| (c.group, c.id));
         if let Some(gpu) = self.nvidia.as_ref().and_then(|n| n.sample()) {
             // Keep WDDM's cross-vendor busiest-engine total when available.
             snapshot.gpu_usage = snapshot.gpu_usage.or(gpu.gpu_usage);
@@ -181,6 +265,7 @@ mod tests {
     fn win32_layout_matches_pointer_width() {
         assert_eq!(std::mem::size_of::<MemoryStatus>(), 64);
         assert_eq!(std::mem::size_of::<super::BatteryState>(), 32);
+        assert_eq!(std::mem::size_of::<super::ProcessorPower>(), 24);
         #[cfg(target_pointer_width = "64")]
         assert_eq!(std::mem::size_of::<PerformanceInfo>(), 104);
         #[cfg(target_pointer_width = "32")]

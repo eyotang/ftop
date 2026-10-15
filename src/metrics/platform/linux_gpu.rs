@@ -22,6 +22,7 @@ struct Engine {
 struct Client {
     key: String,
     engines: HashMap<String, u64>,
+    capacities: HashMap<String, u64>,
     memory: Option<u64>,
 }
 fn client(text: &str) -> Option<Client> {
@@ -42,6 +43,15 @@ fn client(text: &str) -> Option<Client> {
             (values.next() == Some("ns")).then(|| (engine.to_owned(), value))
         })
         .collect();
+    let capacities = fields
+        .iter()
+        .filter_map(|(key, value)| {
+            Some((
+                key.strip_prefix("drm-engine-capacity-")?.to_owned(),
+                value.parse::<u64>().ok()?.max(1),
+            ))
+        })
+        .collect();
     let memory = fields
         .iter()
         .filter(|(k, _)| k.starts_with("drm-resident-"))
@@ -60,6 +70,7 @@ fn client(text: &str) -> Option<Client> {
     Some(Client {
         key: format!("{device}:{id}"),
         engines,
+        capacities,
         memory,
     })
 }
@@ -245,7 +256,8 @@ impl Gpu {
                 if let Some(old) = self.previous.get(&key).filter(|old| **old <= value) {
                     // Include device identity, so independent GPUs are not summed.
                     let device = c.key.rsplit_once(':').map(|(v, _)| v).unwrap_or(&c.key);
-                    *engines.entry(format!("{device}:{engine}")).or_default() += value - old;
+                    *engines.entry(format!("{device}:{engine}")).or_default() +=
+                        (value - old) / c.capacities.get(&engine).copied().unwrap_or(1);
                 }
                 current.insert(key, value);
             }
@@ -385,8 +397,9 @@ mod tests {
     use super::client;
     #[test]
     fn parse_drm_units_and_identity() {
-        let c=client("drm-driver: i915\ndrm-client-id: 9\ndrm-pdev: 0000:00:02.0\ndrm-engine-render: 12000000 ns\ndrm-resident-system: 8 KiB\n").unwrap();
+        let c=client("drm-driver: i915\ndrm-client-id: 9\ndrm-pdev: 0000:00:02.0\ndrm-engine-render: 12000000 ns\ndrm-engine-capacity-render: 2\ndrm-resident-system: 8 KiB\n").unwrap();
         assert_eq!(c.engines["render"], 12000000);
+        assert_eq!(c.capacities["render"], 2);
         assert_eq!(c.memory, Some(8192));
         assert!(c.key.ends_with(":9"));
         assert!(client("pos: 0\n").is_none());

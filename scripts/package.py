@@ -24,6 +24,7 @@ with tempfile.TemporaryDirectory(prefix='ftop-package-') as temporary:
         (bundle / 'MacOS').mkdir(parents=True)
         (bundle / 'Resources').mkdir()
         shutil.copy2(root / 'assets/AppIcon.icns', bundle / 'Resources/AppIcon.icns')
+        shutil.copy2(root / 'LICENSE', bundle / 'Resources/LICENSE')
         shutil.copy2(root / 'target/release/ftop', bundle / 'MacOS/ftop')
         with (bundle / 'Info.plist').open('wb') as target:
             plistlib.dump({'CFBundleName': 'ftop', 'CFBundleIconFile': 'AppIcon.icns', 'CFBundleIdentifier': 'io.github.eyotang.ftop', 'CFBundleExecutable': 'ftop', 'CFBundleVersion': version, 'CFBundleShortVersionString': version, 'CFBundlePackageType': 'APPL', 'NSHighResolutionCapable': True, 'LSMinimumSystemVersion': '14.0'}, target)
@@ -61,6 +62,8 @@ with tempfile.TemporaryDirectory(prefix='ftop-package-') as temporary:
     elif system == 'Linux':
         (stage / 'usr/bin').mkdir(parents=True)
         (stage / 'usr/share/applications').mkdir(parents=True)
+        (stage / 'usr/share/doc/ftop').mkdir(parents=True)
+        shutil.copy2(root / 'LICENSE', stage / 'usr/share/doc/ftop/copyright')
         (stage / 'usr/share/icons/hicolor/256x256/apps').mkdir(parents=True)
         shutil.copy2(root / 'target/release/ftop', stage / 'usr/bin/ftop')
         shutil.copy2(root / 'assets/icon.png', stage / 'usr/share/icons/hicolor/256x256/apps/ftop.png')

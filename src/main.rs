@@ -220,60 +220,64 @@ impl Monitor {
             0x30313f
         }
     }
-    fn badge(&self, glyph: &str, color: u32) -> Div {
-        let description =
-            match glyph {
-                "▦" => format!("CPU · 处理器总占用 {:.0}%", self.data.cpu),
-                "◌" => "CPU · 进程处理器占用".into(),
-                "▥" => format!(
-                    "内存 · 已用 {} / 总计 {} GB · {}",
-                    gb(self.data.memory),
-                    gb(self.data.total_memory),
-                    self.data
-                        .memory_pressure_info
-                        .as_deref()
-                        .unwrap_or("压力传感器未开放")
-                ),
-                "▧" => format!(
-                    "GPU · 图形处理器占用 {} · GPU 内存 {} · 温度 {} · 频率 {} · {}",
-                    self.data
-                        .gpu_usage
-                        .map(|v| format!("{v:.0}%"))
-                        .unwrap_or_else(|| "不可用".into()),
-                    self.data
-                        .gpu_memory
-                        .map(|v| format!("{} GB", gb(v)))
-                        .unwrap_or_else(|| "不可用".into()),
-                    self.data
-                        .gpu_temperature
-                        .map(|v| format!("{v:.0}°C"))
-                        .unwrap_or_else(|| "当前接口无读数".into()),
-                    self.data
-                        .gpu_frequency
-                        .map(|(current, maximum)| format!("{current}/{maximum} MHz"))
-                        .unwrap_or_else(|| "当前接口无读数".into()),
-                    self.data.gpu_info.as_deref().unwrap_or("等待 GPU 采样")
-                ),
-                "↓" => "网络 · 下载速率".into(),
-                "↑" => "网络 · 上传速率".into(),
-                "ϟ" => format!(
-                    "GPU 功耗（W）· {}",
-                    self.data
-                        .gpu_info
-                        .as_deref()
-                        .unwrap_or("当前接口无读数功率传感器")
-                ),
-                "⌂" => self.data.power_label.clone().unwrap_or_else(|| {
+    fn metric_description(&self, glyph: &str) -> String {
+        match glyph {
+            "▦" => format!("CPU · 处理器总占用 {:.0}%", self.data.cpu),
+            "◌" => "CPU · 进程处理器占用".into(),
+            "▥" => format!(
+                "内存 · 已用 {} / 总计 {} GB · {}",
+                gb(self.data.memory),
+                gb(self.data.total_memory),
+                self.data
+                    .memory_pressure_info
+                    .as_deref()
+                    .unwrap_or("压力传感器未开放")
+            ),
+            "▧" => format!(
+                "GPU · 图形处理器占用 {} · GPU 内存 {} · 温度 {} · 频率 {} · {}",
+                self.data
+                    .gpu_usage
+                    .map(|v| format!("{v:.0}%"))
+                    .unwrap_or_else(|| "不可用".into()),
+                self.data
+                    .gpu_memory
+                    .map(|v| format!("{} GB", gb(v)))
+                    .unwrap_or_else(|| "不可用".into()),
+                self.data
+                    .gpu_temperature
+                    .map(|v| format!("{v:.0}°C"))
+                    .unwrap_or_else(|| "当前接口无读数".into()),
+                self.data
+                    .gpu_frequency
+                    .map(|(current, maximum)| format!("{current}/{maximum} MHz"))
+                    .unwrap_or_else(|| "当前接口无读数".into()),
+                self.data.gpu_info.as_deref().unwrap_or("等待 GPU 采样")
+            ),
+            "↓" => "网络 · 下载速率".into(),
+            "↑" => "网络 · 上传速率".into(),
+            "ϟ" => format!(
+                "GPU 功耗（W）· {}",
+                self.data
+                    .gpu_info
+                    .as_deref()
+                    .unwrap_or("当前接口无读数功率传感器")
+            ),
+            "⌂" => {
+                self.data.power_label.clone().unwrap_or_else(|| {
                     "当前接口未获取到功率（不以 CPU/GPU 功率冒充整机功率）".into()
-                }),
-                "♧" => self
-                    .data
-                    .temperature
-                    .as_ref()
-                    .map(|(label, _)| format!("温度 · {label}（°C）"))
-                    .unwrap_or_else(|| "系统/当前接口无读数温度传感器".into()),
-                _ => "系统指标".into(),
-            };
+                })
+            }
+            "♧" => self
+                .data
+                .temperature
+                .as_ref()
+                .map(|(label, _)| format!("温度 · {label}（°C）"))
+                .unwrap_or_else(|| "系统/当前接口无读数温度传感器".into()),
+            _ => "系统指标".into(),
+        }
+    }
+    fn badge(&self, glyph: &str, color: u32) -> Div {
+        let description = self.metric_description(glyph);
         div()
             .flex()
             .items_center()
@@ -329,21 +333,32 @@ impl Monitor {
         .w(px(width))
         .h(px(height))
     }
-    fn gpu_column(&self, width: f32, height: f32, numbered: bool) -> Div {
+    fn gpu_column(&self, width: f32, height: f32, numbered: bool) -> Stateful<Div> {
         let frequency = self.data.gpu_frequency.unwrap_or((0, 0));
         div()
+            .id("gpu-column")
+            .tooltip({
+                let detail = self.metric_description("▧");
+                move |_, cx| chrome::tooltip(detail.clone(), cx)
+            })
+            .relative()
             .ml(px(10.))
             .flex()
             .flex_col()
             .items_center()
             .gap(px(3.))
             .child(
-                div().text_size(px(10.)).text_color(rgb(0xb294ff)).child(
-                    self.data
-                        .gpu_usage
-                        .map(|v| format!("{v:.0}%"))
-                        .unwrap_or_else(|| "—".into()),
-                ),
+                div()
+                    .absolute()
+                    .top(px(-18.))
+                    .text_size(px(10.))
+                    .text_color(rgb(0xb294ff))
+                    .child(
+                        self.data
+                            .gpu_usage
+                            .map(|v| format!("{v:.0}%"))
+                            .unwrap_or_else(|| "—".into()),
+                    ),
             )
             .child(self.bar(
                 self.data.gpu_usage.unwrap_or(0.),
@@ -353,7 +368,8 @@ impl Monitor {
                 0xb294ff,
             ))
             .when(numbered, |column| {
-                column.child(
+                // Match both CPU footer rows; the GPU percentage sits above the bar.
+                column.child(div().text_size(px(10.)).child(" ")).child(
                     div()
                         .text_size(px(8.5))
                         .text_color(rgb(self.muted()))
@@ -405,9 +421,14 @@ impl Monitor {
                 .inset_0(),
             )
     }
-    fn figure(&self, glyph: &str, value: String, color: u32) -> Div {
+    fn figure(&self, glyph: &str, value: String, color: u32) -> Stateful<Div> {
         let (number, unit) = value.split_once(' ').unwrap_or((&value, ""));
+        let description = self.metric_description(glyph);
         div()
+            .id(SharedString::from(format!("metric-{glyph}")))
+            .tooltip(move |_, cx| chrome::tooltip(description.clone(), cx))
+            .rounded(px(5.))
+            .hover(|style| style.bg(rgba(0x88889922)))
             .flex()
             .items_center()
             .gap(px(7.))

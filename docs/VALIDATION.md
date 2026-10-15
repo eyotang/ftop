@@ -40,3 +40,9 @@ Linux: 10 tests passed locally. Real Intel DRM GPU utilization and resident-memo
 Windows adds persistent PDH GPU/thermal/frequency counters, native CPU efficiency classes, optional NVML, and battery discharge telemetry; hardware readings require native acceptance. Release packaging checks the PE GUI subsystem value. macOS packaging verifies the DMG, mounts it read-only and checks its app icon and Applications symlink. Final three-platform packaging result is recorded in GitHub Actions.
 
 Performance revision: local Linux has 11 passing tests, including cached-descriptor alias fallback after fd reuse. Controlled GPU on/off and minimized measurements are in PERFORMANCE.md. Windows counter module type-check was also performed locally without native linking; Windows CI remains required for actual build/test/package validation.
+
+## Hover and column alignment correction
+
+The GPU percentage is positioned above its column without participating in flex height; its footer reserves the same usage/frequency rows as CPU columns. Metric figures now have stable full-area tooltip targets and a subtle hover background, including the numeric area. The GPU column also exposes its sensor description. No sampler, timer or refresh-rate changes were introduced.
+
+Local Ubuntu X11 native screenshots verify CPU icon and numeric-area tooltips, memory tooltip, and GPU-column tooltip across multiple one-second samples, with matching CPU/GPU bar bounds. Evidence remains ignored under docs/evidence/hover-fix-*.png. Formatting, locked check/build, and all 11 tests pass. macOS/Windows native appearance and Ubuntu Wayland input remain unverified for this revision.

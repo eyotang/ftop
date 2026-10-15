@@ -4,11 +4,11 @@
 
 当前是开发中的原生实现，还未达到原版功能和视觉完全一致。采集器按目标平台隔离，UI 只依赖共享数据模型：
 
-- **Ubuntu/Linux**：直接读取 `/proc/stat`、`/proc/meminfo`、`/proc/<pid>/stat`、`/proc/net/dev` 和 sysfs；只枚举进程，不把线程当成应用，不读取磁盘与命令行。传感器每五个采样更新。
+- **Ubuntu/Linux**：直接读取 `/proc/stat`、`/proc/meminfo`、`/proc/<pid>/stat`、`/proc/net/dev` 和 sysfs；只枚举进程，不把线程当成应用，不读取磁盘与命令行。CPU 温度每五个采样更新；GPU 按 AMD sysfs、Intel PMU/DRM 和 NVIDIA NVML 分别采集。
 - **macOS**：复用原版 MIT C 采集层，接入 IOReport 核心频率/分组、GPU、SMC 功耗和温度；Mach/sysctl 按原版口径计算内存、压缩、Swap 和压力。进程和网络使用 sysinfo 的原生 Mach/libproc 后端。私有硬件接口失败时显示不可用。
-- **Windows**：使用 sysinfo 的原生 CPU/进程/网卡实现与 Win32 内存接口；`GetPerformanceInfo` 的 Commit 单独标注，不能当作 Swap。没有通过 WMI 轮询温度，也不拿标称频率伪装实时核心频率。
+- **Windows**：使用 sysinfo 的原生 CPU/进程/网卡实现与 Win32 内存接口；`GetPerformanceInfo` 的 Commit 单独标注，不能当作 Swap。接入 WDDM GPU/显存、ACPI 温度、驱动报告 CPU 频率和核心分组，以及电池/Energy Meter 功耗；NVIDIA NVML 补充其可用传感器。没有通过 WMI 轮询温度，也不拿标称频率伪装实时核心频率。
 
-进程 CPU 按整机归一化；同名进程聚合，可点击查看详情。设置存储在系统配置目录 `ftop-gpui/config.json`。不可用的 GPU、压缩内存、温度和功耗显示 `—`。macOS 硬件桥接的来源和边界见 [说明](native/macos/README.md)。
+进程 CPU 按整机归一化；同名进程聚合，可点击查看详情。设置存储在系统配置目录 `ftop-gpui/config.json`。当前接口无法读取的指标明确显示不可用，可悬停查看来源和限制；这不表示系统一定不存在该数据。macOS 硬件桥接的来源和边界见 [说明](native/macos/README.md)。
 
 默认每秒采样一次，仅在数据到达时重绘，不运行持续 30 FPS 整窗动画；可选 Motion 使用有界短过渡。`--no-motion` / `--motion` 仅覆盖本次启动。窗口不可见时等待系统可见性通知并暂停采集，实际遮挡检测取决于平台后端。
 

@@ -16,7 +16,6 @@ struct Item {
 unsafe extern "system" {
     fn PdhOpenQueryW(source: *const u16, user: usize, query: *mut Handle) -> u32;
     fn PdhAddEnglishCounterW(
-        scratch: Vec<u64>,
         query: Handle,
         path: *const u16,
         user: usize,
@@ -33,6 +32,7 @@ unsafe extern "system" {
     fn PdhCloseQuery(query: Handle) -> u32;
 }
 pub struct Counters {
+    scratch: Vec<u64>,
     query: Handle,
     engine: Handle,
     dedicated: Handle,

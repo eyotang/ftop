@@ -32,3 +32,9 @@ A later revision separates Linux, macOS and Windows backends. Local Linux check 
 ## Release preparation
 
 Run 38670091638 passed on all three platforms for a7ae4d5. Latest revision 3572e31 also passed all three platform checks in run 38671782880. The packaging workflow builds all platforms before creating a draft prerelease; it does not publish a stable release or stable update manifest. Native macOS/Windows acceptance remains outstanding.
+
+## Native telemetry and packaging revision
+
+Linux: 10 tests passed locally. Real Intel DRM GPU utilization and resident-memory estimates, sysfs clocks, coretemp, Zswap, and PSI were read outside the filesystem sandbox. Intel PMU/RAPL remain subject to kernel permissions. A native CPU-icon hover screenshot confirmed the tooltip and the GPU percentage above the purple column; images remain ignored. A 20-second GPU-enabled release run measured 2.9% of one core / 120.89 MiB RSS.
+
+Windows adds persistent PDH GPU/thermal/frequency counters, native CPU efficiency classes, optional NVML, and battery discharge telemetry; hardware readings require native acceptance. Release packaging checks the PE GUI subsystem value. macOS packaging verifies the DMG, mounts it read-only and checks its app icon and Applications symlink. Final three-platform packaging result is recorded in GitHub Actions.

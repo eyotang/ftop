@@ -13,7 +13,7 @@ Sources are sampled off the UI thread. A successful build does not prove availab
 | GPU utilization | Upstream IOKit/IOReport | WDDM PDH: sum process shares per physical engine, select busiest engine; NVML fallback | AMD gpu_busy_percent; Intel PMU busiest engine, fallback accessible-client DRM fdinfo; NVIDIA NVML |
 | GPU memory | Upstream IOKit | PDH dedicated + shared adapter usage; NVML fallback | AMD VRAM used; NVIDIA NVML; Intel accessible-client resident memory estimate |
 | GPU frequency | Upstream IOReport where supported | NVIDIA NVML where available | Intel sysfs / AMD active DPM state / NVIDIA NVML |
-| GPU temperature/power | Upstream energy/SMC APIs where supported | NVIDIA NVML where available | AMD hwmon / NVIDIA NVML where available |
+| GPU temperature/power | Upstream energy/SMC APIs where supported | NVIDIA NVML where available | AMD/Intel hwmon / NVIDIA NVML where available |
 | Temperature badge | Original CPU/PMU sensors | ACPI thermal zone, GPU fallback if exposed; never labeled CPU core temperature | hwmon CPU sensor preferred, GPU fallback |
 | Power badge | SMC system PSTR | Battery discharge only when supported and discharging; no universal wall-power API | Battery discharge preferred; otherwise RAPL CPU packages, explicitly not whole-machine power |
 | Network throughput | Native sysinfo interfaces | Native sysinfo interfaces | Physical sysfs interfaces + procfs byte deltas |

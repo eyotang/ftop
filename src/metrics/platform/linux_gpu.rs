@@ -331,9 +331,23 @@ impl Gpu {
                 info = "Intel GPU · DRM fdinfo 可访问进程范围估计；GPU 内存为客户端 resident 合计，共享缓冲可能重复".into();
             }
             let current = number(card.join("gt_cur_freq_mhz"))
-                .or_else(|| number(card.join("gt/gt0/rps_cur_freq_mhz")));
+                .or_else(|| number(card.join("gt/gt0/rps_cur_freq_mhz")))
+                .or_else(|| number(card.join("device/tile0/gt0/freq0/cur_freq")));
             let maximum = number(card.join("gt_max_freq_mhz"))
-                .or_else(|| number(card.join("gt/gt0/rps_max_freq_mhz")));
+                .or_else(|| number(card.join("gt/gt0/rps_max_freq_mhz")))
+                .or_else(|| number(card.join("device/tile0/gt0/freq0/max_freq")));
+            let mut gpu_power = None;
+            let mut gpu_temperature = None;
+            for hw in fs::read_dir(card.join("device/hwmon"))
+                .into_iter()
+                .flatten()
+                .flatten()
+            {
+                gpu_power = number(hw.path().join("power1_average"))
+                    .or_else(|| number(hw.path().join("power1_input")))
+                    .map(|v| v as f32 / 1e6);
+                gpu_temperature = number(hw.path().join("temp1_input")).map(|v| v as f32 / 1000.);
+            }
             if selected
                 .as_ref()
                 .is_none_or(|old| usage.unwrap_or(-1.) > old.gpu_usage.unwrap_or(-1.))
@@ -342,8 +356,12 @@ impl Gpu {
                     gpu_usage: usage,
                     gpu_memory: memory,
                     gpu_frequency: current.zip(maximum),
+                    gpu_power,
+                    gpu_temperature,
                     gpu_info: Some(if usage.is_some() {
                         info
+                    } else if !self.engines.is_empty() {
+                        "Intel PMU 等待第二次有效采样".into()
                     } else {
                         format!(
                             "Intel GPU 计数器未开放：PMU {}；DRM fdinfo 无可读计数器",

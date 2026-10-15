@@ -16,6 +16,7 @@ struct Item {
 unsafe extern "system" {
     fn PdhOpenQueryW(source: *const u16, user: usize, query: *mut Handle) -> u32;
     fn PdhAddEnglishCounterW(
+        scratch: Vec<u64>,
         query: Handle,
         path: *const u16,
         user: usize,
@@ -43,6 +44,7 @@ pub struct Counters {
 impl Counters {
     pub fn new() -> Self {
         let mut this = Self {
+            scratch: Vec::new(),
             query: 0,
             engine: 0,
             dedicated: 0,
@@ -82,7 +84,7 @@ impl Counters {
         }
         this
     }
-    fn values(&self, counter: Handle) -> Vec<(String, f64)> {
+    fn values(&mut self, counter: Handle) -> Vec<(String, f64)> {
         if counter == 0 {
             return Vec::new();
         }
@@ -100,7 +102,8 @@ impl Counters {
             if bytes == 0 || bytes > 16 * 1024 * 1024 {
                 return Vec::new();
             }
-            let mut buffer = vec![0u64; (bytes as usize).div_ceil(8)];
+            let mut buffer = std::mem::take(&mut self.scratch);
+            buffer.resize((bytes as usize).div_ceil(8), 0);
             if PdhGetFormattedCounterArrayW(
                 counter,
                 0x200 | 0x8000,
@@ -116,7 +119,7 @@ impl Counters {
             }
             let start = buffer.as_ptr() as usize;
             let end = start + buffer.len() * 8;
-            std::slice::from_raw_parts(buffer.as_ptr().cast::<Item>(), count as usize)
+            let values = std::slice::from_raw_parts(buffer.as_ptr().cast::<Item>(), count as usize)
                 .iter()
                 .filter_map(|item| {
                     if item.value.status > 1 || !item.value.value.is_finite() {
@@ -130,7 +133,12 @@ impl Counters {
                     let length = text.iter().position(|v| *v == 0)?;
                     Some((String::from_utf16_lossy(&text[..length]), item.value.value))
                 })
-                .collect()
+                .collect();
+            // Retain at most one MiB, not a permanently enlarged provider buffer.
+            if buffer.capacity() * 8 <= 1024 * 1024 {
+                self.scratch = buffer;
+            }
+            values
         }
     }
     pub fn sample(&mut self, s: &mut Snapshot) {

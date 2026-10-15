@@ -1,7 +1,7 @@
 //! Driver-specific GPU adapters. Persistent PMU/NVML handles; cached DRM descriptors.
 use crate::metrics::Snapshot;
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     fs,
     io::Read,
     os::fd::{AsRawFd, FromRawFd},
@@ -26,59 +26,84 @@ struct Client {
     memory: Option<u64>,
 }
 fn client(text: &str) -> Option<Client> {
-    let fields: HashMap<_, _> = text
-        .lines()
-        .filter_map(|l| l.split_once(':'))
-        .map(|(k, v)| (k, v.trim()))
-        .collect();
-    let driver = fields.get("drm-driver")?;
-    let id = fields.get("drm-client-id")?;
-    let device = fields.get("drm-pdev").copied().unwrap_or(driver);
-    let engines = fields
-        .iter()
-        .filter_map(|(k, v)| {
-            let engine = k.strip_prefix("drm-engine-")?;
-            let mut values = v.split_whitespace();
-            let value = values.next()?.parse::<u64>().ok()?;
-            (values.next() == Some("ns")).then(|| (engine.to_owned(), value))
-        })
-        .collect();
-    let capacities = fields
-        .iter()
-        .filter_map(|(key, value)| {
-            Some((
-                key.strip_prefix("drm-engine-capacity-")?.to_owned(),
-                value.parse::<u64>().ok()?.max(1),
-            ))
-        })
-        .collect();
-    let memory = fields
-        .iter()
-        .filter(|(k, _)| k.starts_with("drm-resident-"))
-        .filter_map(|(_, v)| {
-            let mut fields = v.split_whitespace();
-            let value = fields.next()?.parse::<u64>().ok()?;
-            let scale = match fields.next()? {
-                "KiB" => 1024,
-                "MiB" => 1024 * 1024,
-                "bytes" => 1,
-                _ => return None,
-            };
-            Some(value.saturating_mul(scale))
-        })
-        .reduce(u64::saturating_add);
+    let (mut driver, mut id, mut device) = (None, None, None);
+    let mut engines = HashMap::with_capacity(4);
+    let mut capacities = HashMap::new();
+    let mut memory = None;
+    for line in text.lines() {
+        let Some((key, value)) = line.split_once(':') else {
+            continue;
+        };
+        let value = value.trim();
+        match key {
+            "drm-driver" => driver = Some(value),
+            "drm-client-id" => id = Some(value),
+            "drm-pdev" => device = Some(value),
+            _ => {
+                if let Some(engine) = key.strip_prefix("drm-engine-capacity-") {
+                    if let Ok(value) = value.parse::<u64>() {
+                        capacities.insert(engine.to_owned(), value.max(1));
+                    }
+                } else if let Some(engine) = key.strip_prefix("drm-engine-") {
+                    let mut parts = value.split_whitespace();
+                    if let (Some(Ok(value)), Some("ns")) =
+                        (parts.next().map(str::parse::<u64>), parts.next())
+                    {
+                        engines.insert(engine.to_owned(), value);
+                    }
+                } else if key.starts_with("drm-resident-") {
+                    let mut parts = value.split_whitespace();
+                    if let (Some(Ok(value)), Some(unit)) =
+                        (parts.next().map(str::parse::<u64>), parts.next())
+                    {
+                        let scale = match unit {
+                            "KiB" => 1024,
+                            "MiB" => 1024 * 1024,
+                            "bytes" => 1,
+                            _ => continue,
+                        };
+                        memory = Some(
+                            memory
+                                .unwrap_or(0u64)
+                                .saturating_add(value.saturating_mul(scale)),
+                        );
+                    }
+                }
+            }
+        }
+    }
     Some(Client {
-        key: format!("{device}:{id}"),
+        key: format!("{}:{}", device.unwrap_or(driver?), id?),
         engines,
         capacities,
         memory,
     })
 }
+struct CachedClient {
+    key: String,
+    paths: Vec<PathBuf>,
+}
+impl CachedClient {
+    fn read(&self, buffer: &mut [u8]) -> Option<Client> {
+        self.paths
+            .iter()
+            .find_map(|path| read_client(path, buffer).filter(|client| client.key == self.key))
+    }
+}
+fn read_client(path: &Path, buffer: &mut [u8]) -> Option<Client> {
+    let mut file = fs::File::open(path).ok()?;
+    let n = file.read(buffer).ok()?;
+    if n == buffer.len() {
+        return None;
+    }
+    client(std::str::from_utf8(&buffer[..n]).ok()?)
+}
 pub struct Gpu {
+    enabled: bool,
     cards: Vec<Card>,
     nvidia: Option<super::nvidia::Nvidia>,
     engines: Vec<Engine>,
-    clients: Vec<PathBuf>,
+    clients: Vec<CachedClient>,
     previous: HashMap<(String, String), u64>,
     last: Instant,
     discovery: Instant,
@@ -86,11 +111,16 @@ pub struct Gpu {
 }
 impl Gpu {
     pub fn new() -> Self {
+        let enabled = !std::env::args().any(|arg| arg == "--no-gpu");
         let mut cards = Vec::new();
-        for e in fs::read_dir("/sys/class/drm")
-            .into_iter()
-            .flatten()
-            .flatten()
+        for e in fs::read_dir(if enabled {
+            "/sys/class/drm"
+        } else {
+            "/nonexistent/ftop-gpu-disabled"
+        })
+        .into_iter()
+        .flatten()
+        .flatten()
         {
             let name = e.file_name().to_string_lossy().into_owned();
             if !name
@@ -107,8 +137,13 @@ impl Gpu {
             cards.push(Card { path, driver });
         }
         let mut this = Self {
+            enabled,
             cards,
-            nvidia: super::nvidia::Nvidia::new(),
+            nvidia: if enabled {
+                super::nvidia::Nvidia::new()
+            } else {
+                None
+            },
             engines: Vec::new(),
             clients: Vec::new(),
             previous: HashMap::new(),
@@ -116,6 +151,9 @@ impl Gpu {
             discovery: Instant::now(),
             pmu_error: None,
         };
+        if !enabled {
+            return this;
+        }
         this.open_pmu();
         if this.engines.is_empty()
             && this
@@ -178,7 +216,8 @@ impl Gpu {
     }
     fn discover_clients(&mut self) {
         self.discovery = Instant::now();
-        let mut paths = Vec::new();
+        let mut paths = HashMap::<String, Vec<PathBuf>>::new();
+        let mut buffer = [0u8; 16384];
         for process in fs::read_dir("/proc").into_iter().flatten().flatten() {
             if process
                 .file_name()
@@ -197,11 +236,17 @@ impl Gpu {
                     .ok()
                     .is_some_and(|v| v.to_string_lossy().starts_with("/dev/dri/"))
                 {
-                    paths.push(process.path().join("fdinfo").join(fd.file_name()));
+                    let path = process.path().join("fdinfo").join(fd.file_name());
+                    if let Some(client) = read_client(&path, &mut buffer) {
+                        paths.entry(client.key).or_default().push(path);
+                    }
                 }
             }
         }
-        self.clients = paths;
+        self.clients = paths
+            .into_iter()
+            .map(|(key, paths)| CachedClient { key, paths })
+            .collect();
     }
     fn pmu(&mut self, elapsed: f64) -> Option<f32> {
         let mut maximum: Option<f64> = None;
@@ -229,25 +274,16 @@ impl Gpu {
         if self.discovery.elapsed().as_secs() >= 10 {
             self.discover_clients();
         }
-        let mut seen = HashSet::new();
         let mut current = HashMap::new();
         let mut engines = HashMap::<String, u64>::new();
         let mut memory = None;
         let mut buffer = [0u8; 16384];
-        for path in &self.clients {
-            let Ok(mut f) = fs::File::open(path) else {
+        for cached in &self.clients {
+            // Read one descriptor per DRM client, not every duplicated/inherited fd.
+            // Keep aliases for a cheap fallback when the preferred process exits.
+            let Some(c) = cached.read(&mut buffer) else {
                 continue;
             };
-            let Ok(n) = f.read(&mut buffer) else { continue };
-            if n == buffer.len() {
-                continue;
-            }
-            let Some(c) = std::str::from_utf8(&buffer[..n]).ok().and_then(client) else {
-                continue;
-            };
-            if !seen.insert(c.key.clone()) {
-                continue;
-            }
             if let Some(bytes) = c.memory {
                 memory = Some(memory.unwrap_or(0u64).saturating_add(bytes));
             }
@@ -272,10 +308,13 @@ impl Gpu {
         )
     }
     pub fn sample(&mut self) -> Snapshot {
+        if !self.enabled {
+            return Snapshot::default();
+        }
         let now = Instant::now();
         let elapsed = now.duration_since(self.last).as_secs_f64().max(0.001);
         self.last = now;
-        let mut selected = self.nvidia.as_ref().and_then(|n| n.sample());
+        let mut selected = self.nvidia.as_mut().and_then(|n| n.sample());
         for card in &self.cards {
             let device = card.path.join("device");
             if let Some(usage) = number(device.join("gpu_busy_percent")).filter(|v| *v <= 100) {
@@ -394,7 +433,46 @@ impl Gpu {
 }
 #[cfg(test)]
 mod tests {
-    use super::client;
+    use super::{CachedClient, client};
+    #[test]
+    fn cached_client_falls_back_when_descriptor_is_reused() {
+        struct Fixture(std::path::PathBuf);
+        impl Drop for Fixture {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_dir_all(&self.0);
+            }
+        }
+        let root = std::env::temp_dir().join(format!(
+            "ftop-drm-alias-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir(&root).unwrap();
+        let fixture = Fixture(root);
+        let a = fixture.0.join("reused");
+        let b = fixture.0.join("alias");
+        std::fs::write(
+            &a,
+            "drm-driver: i915\ndrm-client-id: 99\ndrm-engine-render: 800 ns\n",
+        )
+        .unwrap();
+        std::fs::write(
+            &b,
+            "drm-driver: i915\ndrm-client-id: 7\ndrm-engine-render: 200 ns\n",
+        )
+        .unwrap();
+        let cached = CachedClient {
+            key: "i915:7".into(),
+            paths: vec![a, b],
+        };
+        assert_eq!(
+            cached.read(&mut [0u8; 4096]).unwrap().engines["render"],
+            200
+        );
+    }
     #[test]
     fn parse_drm_units_and_identity() {
         let c=client("drm-driver: i915\ndrm-client-id: 9\ndrm-pdev: 0000:00:02.0\ndrm-engine-render: 12000000 ns\ndrm-engine-capacity-render: 2\ndrm-resident-system: 8 KiB\n").unwrap();

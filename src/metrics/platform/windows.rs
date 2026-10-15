@@ -198,7 +198,7 @@ impl Backend {
                 .unwrap_or(0);
         }
         snapshot.cores.sort_by_key(|c| (c.group, c.id));
-        if let Some(gpu) = self.nvidia.as_ref().and_then(|n| n.sample()) {
+        if let Some(gpu) = self.nvidia.as_mut().and_then(|n| n.sample()) {
             // Keep WDDM's cross-vendor busiest-engine total when available.
             snapshot.gpu_usage = snapshot.gpu_usage.or(gpu.gpu_usage);
             snapshot.gpu_memory = snapshot.gpu_memory.or(gpu.gpu_memory);

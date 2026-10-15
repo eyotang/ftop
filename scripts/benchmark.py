@@ -14,6 +14,7 @@ parser.add_argument('--warmup', type=float, default=5)
 parser.add_argument('--output', type=pathlib.Path)
 parser.add_argument('--label', default='native')
 parser.add_argument('--minimized', action='store_true')
+parser.add_argument('--gpu', choices=['on','off'],default='on')
 parser.add_argument('--motion', choices=['on','off'],default='off')
 parser.add_argument('--backend', choices=['wayland', 'x11'], default='wayland')
 args = parser.parse_args()
@@ -28,6 +29,8 @@ if args.backend == 'x11':
     environment['WAYLAND_DISPLAY'] = ''
     environment['XMODIFIERS'] = '@im=none'
 command=[str(pathlib.Path(args.binary).resolve()), '--motion' if args.motion == 'on' else '--no-motion']
+if args.gpu == 'off':
+    command.append('--no-gpu')
 if args.minimized:
     command.append('--benchmark-hidden')
 process = subprocess.Popen(command, env=environment)
@@ -60,7 +63,8 @@ try:
     status = pathlib.Path(f'/proc/{process.pid}/status').read_text().splitlines()
     rss = next(int(line.split()[1]) for line in status if line.startswith('VmRSS:'))
     one_core = 100 * (after - before) / elapsed
-    result = {'label': args.label, 'backend': args.backend, 'motion': args.motion, 'minimized': args.minimized, 'seconds': round(elapsed, 3), 'cpu_one_core_percent': round(one_core, 3), 'cpu_whole_machine_percent': round(one_core / os.cpu_count(), 3), 'logical_cpus': os.cpu_count(), 'rss_mib': round(rss / 1024, 2)}
+    result = {'label': args.label, 'backend': args.backend, 'motion': args.motion,
+        'gpu': args.gpu, 'minimized': args.minimized, 'seconds': round(elapsed, 3), 'cpu_one_core_percent': round(one_core, 3), 'cpu_whole_machine_percent': round(one_core / os.cpu_count(), 3), 'logical_cpus': os.cpu_count(), 'rss_mib': round(rss / 1024, 2)}
     result['busiest_threads'] = sorted([{'name': name, 'cpu_one_core_percent': round(100 * (ticks - before_threads.get(tid, ('', 0))[1]) / elapsed, 3)} for tid, (name, ticks) in after_threads.items()], key=lambda item: -item['cpu_one_core_percent'])[:5]
     rendered = json.dumps(result, indent=2)
     print(rendered)

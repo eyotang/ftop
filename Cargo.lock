@@ -1680,8 +1680,11 @@ dependencies = [
 name = "ftop"
 version = "0.1.0"
 dependencies = [
+ "async-channel",
+ "cc",
  "dirs 6.0.0",
  "gpui-kit",
+ "libc",
  "reqwest",
  "serde",
  "serde_json",

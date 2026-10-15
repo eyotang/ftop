@@ -2,7 +2,15 @@
 
 使用 Rust / GPUI Kit 复刻 [Nongfsq/ftop](https://github.com/Nongfsq/ftop) 的浮动系统监视面板。使用 GPUI Kit Base 自绘最外层透明圆角窗口，保留深色玻璃底色、蓝色胶囊核心柱、绿色内存条、紧凑进程列表和 Sea / Graphite / Warm 配色。原版 MIT 许可证保留于 LICENSE。
 
-当前是开发中的原生实现，还未达到原版功能和视觉完全一致。CPU、内存、交换空间、网络速率和进程来自 sysinfo，后台线程采集。CPU 进程占比按整机归一化；同名进程聚合，可点击查看详情。设置存储在系统配置目录 `ftop-gpui/config.json`。CPU 频率为系统提供的采样值，不能等同于原版 Apple Silicon 私有接口的实时频率。温度读取系统可用传感器，悬浮可查看实际传感器名称。GPU、压缩内存和功耗尚未接入，显示 `—`。
+当前是开发中的原生实现，还未达到原版功能和视觉完全一致。采集器按目标平台隔离，UI 只依赖共享数据模型：
+
+- **Ubuntu/Linux**：直接读取 `/proc/stat`、`/proc/meminfo`、`/proc/<pid>/stat`、`/proc/net/dev` 和 sysfs；只枚举进程，不把线程当成应用，不读取磁盘与命令行。传感器每五个采样更新。
+- **macOS**：复用原版 MIT C 采集层，接入 IOReport 核心频率/分组、GPU、SMC 功耗和温度；Mach/sysctl 按原版口径计算内存、压缩、Swap 和压力。进程和网络使用 sysinfo 的原生 Mach/libproc 后端。私有硬件接口失败时显示不可用。
+- **Windows**：使用 sysinfo 的原生 CPU/进程/网卡实现与 Win32 内存接口；`GetPerformanceInfo` 的 Commit 单独标注，不能当作 Swap。没有通过 WMI 轮询温度，也不拿标称频率伪装实时核心频率。
+
+进程 CPU 按整机归一化；同名进程聚合，可点击查看详情。设置存储在系统配置目录 `ftop-gpui/config.json`。不可用的 GPU、压缩内存、温度和功耗显示 `—`。macOS 硬件桥接的来源和边界见 [说明](native/macos/README.md)。
+
+默认每秒采样一次，仅在数据到达时重绘，不运行持续 30 FPS 整窗动画；可选 Motion 使用有界短过渡。`--no-motion` / `--motion` 仅覆盖本次启动。窗口不可见时等待系统可见性通知并暂停采集，实际遮挡检测取决于平台后端。
 
 ## 开发
 
@@ -24,7 +32,7 @@ macOS 需要 Xcode Command Line Tools；Windows 使用 MSVC Rust 工具链与 Vi
 
 ## 操作
 
-点击右上角 `•••` 打开模块开关、浅色模式和配色；CPU / Memory 切换进程排序；点击进程查看聚合指标。窗口可缩放，宽窗口并排显示采集指标与进程列表，窄窗口纵向排列。
+点击右上角 `•••` 打开模块开关、浅色模式和配色；进程上方两个圆形徽章切换 CPU / 内存排序；点击进程查看聚合指标。窗口可缩放，宽窗口并排显示采集指标与进程列表，窄窗口纵向排列。
 
 ## 更新和发布
 
@@ -41,3 +49,5 @@ Metra 的 Windows NSIS 应用内签名更新依赖 Tauri，本项目尚未实现
 本机 Ubuntu 26.04 的 X11 输入法需 `XMODIFIERS=@im=none` 临时启动；Wayland 不需要此参数。
 
 在目标系统运行 `python3 scripts/package.py` 构建原生包：macOS `.app.zip`、Windows Portable ZIP、Ubuntu `.deb`。尚未验证安装流程。Ubuntu 24.04 发行包必须在 Ubuntu 24.04 构建；脚本按构建宿主的 glibc 版本声明最低依赖，避免把更新系统产物误标为兼容旧版。
+
+性能测量使用 `cargo build --release` 后运行 `python3 scripts/benchmark.py --binary target/release/ftop --seconds 15 --backend x11`。脚本区分单核与整机 CPU，并记录 RSS；详见 [性能记录](docs/PERFORMANCE.md)。

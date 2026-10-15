@@ -21,7 +21,7 @@ impl Default for Settings {
             network: true,
             processes: true,
             interval: 1,
-            motion: true,
+            motion: false,
         }
     }
 }

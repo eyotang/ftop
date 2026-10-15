@@ -1,10 +1,12 @@
-use std::{collections::HashMap, time::Instant};
-use sysinfo::{Components, Networks, ProcessesToUpdate, System};
-
+mod platform;
+pub use platform::Backend as Collector;
 #[derive(Clone, Debug)]
 pub struct Core {
     pub usage: f32,
     pub mhz: u64,
+    pub max_mhz: u64,
+    pub id: u32,
+    pub group: usize,
 }
 #[derive(Clone, Debug)]
 pub struct Process {
@@ -25,82 +27,14 @@ pub struct Snapshot {
     pub upload: f64,
     pub processes: Vec<Process>,
     pub temperature: Option<(String, f32)>,
-}
-pub struct Collector {
-    system: System,
-    networks: Networks,
-    last: Instant,
-    components: Components,
-}
-impl Collector {
-    pub fn new() -> Self {
-        Self {
-            system: System::new_all(),
-            networks: Networks::new_with_refreshed_list(),
-            last: Instant::now(),
-            components: Components::new_with_refreshed_list(),
-        }
-    }
-    pub fn sample(&mut self) -> Snapshot {
-        self.system.refresh_cpu_all();
-        self.system.refresh_memory();
-        self.components.refresh(true);
-        self.system.refresh_processes(ProcessesToUpdate::All, true);
-        self.networks.refresh(true);
-        let elapsed = self.last.elapsed().as_secs_f64().max(0.001);
-        self.last = Instant::now();
-        let cores: Vec<_> = self
-            .system
-            .cpus()
-            .iter()
-            .map(|c| Core {
-                usage: c.cpu_usage(),
-                mhz: c.frequency(),
-            })
-            .collect();
-        let mut groups: HashMap<String, Process> = HashMap::new();
-        for (pid, p) in self.system.processes() {
-            let name = p.name().to_string_lossy().into_owned();
-            let group = groups.entry(name.clone()).or_insert(Process {
-                name,
-                cpu: 0.,
-                memory: 0,
-                pids: Vec::new(),
-            });
-            group.cpu += p.cpu_usage() / cores.len().max(1) as f32;
-            group.memory += p.memory();
-            group.pids.push(pid.as_u32());
-        }
-        let mut processes: Vec<_> = groups.into_values().collect();
-        processes.sort_by(|a, b| b.cpu.total_cmp(&a.cpu).then_with(|| a.name.cmp(&b.name)));
-        Snapshot {
-            cpu: self.system.global_cpu_usage(),
-            cores,
-            memory: self.system.used_memory(),
-            total_memory: self.system.total_memory(),
-            swap: self.system.used_swap(),
-            total_swap: self.system.total_swap(),
-            download: self
-                .networks
-                .values()
-                .map(|n| n.received() as f64)
-                .sum::<f64>()
-                / elapsed,
-            upload: self
-                .networks
-                .values()
-                .map(|n| n.transmitted() as f64)
-                .sum::<f64>()
-                / elapsed,
-            processes,
-            temperature: self
-                .components
-                .iter()
-                .filter_map(|c| c.temperature().map(|t| (c.label().to_string(), t)))
-                .filter(|(_, t)| t.is_finite())
-                .max_by(|a, b| a.1.total_cmp(&b.1)),
-        }
-    }
+    pub compressed: Option<u64>,
+    pub pressure: Option<u32>,
+    pub gpu_usage: Option<f32>,
+    pub gpu_memory: Option<u64>,
+    pub gpu_power: Option<f32>,
+    pub power: Option<f32>,
+    pub swap_label: &'static str,
+    pub error: Option<String>,
 }
 pub fn gb(bytes: u64) -> String {
     format!("{:.1}", bytes as f64 / 1_073_741_824.)

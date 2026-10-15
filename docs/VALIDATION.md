@@ -24,3 +24,7 @@ The optional upstream screenshot test feature was investigated but removed: it c
 Not verified: macOS/Windows native appearance and input, GPU/power hardware APIs, performance in release builds, screen reader paths, installer behavior, code signing, application-internal installation of signed updates. Packaging scripts are source deliverables and do not mean packages have been built or tested.
 
 Manual acceptance on each target: launch; resize wide/narrow/minimum; toggle modules; switch CPU/memory order; click a process and dismiss; switch light/dark and palettes; restart and verify settings; check updates with and without network; minimize and quit. Inspect correct units, no fabricated hardware values, long names, high DPI, keyboard reachability and native URL opening. Run these from an installed package before publishing a stable release.
+
+## Platform collector revision
+
+A later revision separates Linux, macOS and Windows backends. Local Linux check and 8 tests pass, including procfs guest-time accounting, memory units, and process names containing spaces/parentheses. macOS now links the unmodified upstream C hardware bridge and uses original memory formulas; Windows declares explicit Win32 memory/commit structures. These new native paths require a fresh CI run and real macOS/Windows hardware validation. Previous three-platform success applies to the earlier revision, not automatically to these changes. See PERFORMANCE.md for measured CPU reductions and remaining gaps.

@@ -8,106 +8,153 @@ use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use metrics::{Snapshot, gb, rate};
 use settings::Settings;
-use std::{sync::mpsc, time::Duration};
+use std::{
+    sync::{Arc, Condvar, Mutex, mpsc},
+    time::Duration,
+};
 
 struct Monitor {
     data: Snapshot,
     displayed_usage: Vec<f32>,
 
-    receiver: mpsc::Receiver<Snapshot>,
+    _visibility: Subscription,
     settings: Settings,
     controls: bool,
     by_memory: bool,
     selected: Option<String>,
     error: Option<String>,
-    update_receiver: mpsc::Receiver<(bool, Result<Option<String>, String>)>,
+
     update_request: mpsc::SyncSender<()>,
     update_message: Option<String>,
     update_version: Option<String>,
 }
 impl Monitor {
-    fn new(cx: &mut Context<Self>) -> Self {
-        let settings = Settings::load();
-        let (update_sender, update_receiver) = mpsc::channel();
+    fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let mut settings = Settings::load();
+        if std::env::args().any(|arg| arg == "--no-motion") {
+            settings.motion = false;
+        }
+        if std::env::args().any(|arg| arg == "--motion") {
+            settings.motion = true;
+        }
+        let (update_sender, update_receiver) = async_channel::bounded(1);
         let (update_request, requests) = mpsc::sync_channel(1);
-        std::thread::spawn(move || {
-            let mut timeout = updater::STARTUP_DELAY;
-            loop {
-                let manual = match requests.recv_timeout(timeout) {
-                    Ok(()) => true,
-                    Err(mpsc::RecvTimeoutError::Timeout) => false,
-                    Err(mpsc::RecvTimeoutError::Disconnected) => break,
-                };
-                timeout = updater::CHECK_INTERVAL;
-                if !manual && cfg!(debug_assertions) {
-                    continue;
+        std::thread::Builder::new()
+            .name("ftop-updater".into())
+            .spawn(move || {
+                let mut timeout = updater::STARTUP_DELAY;
+                loop {
+                    let manual = match requests.recv_timeout(timeout) {
+                        Ok(()) => true,
+                        Err(mpsc::RecvTimeoutError::Timeout) => false,
+                        Err(mpsc::RecvTimeoutError::Disconnected) => break,
+                    };
+                    timeout = updater::CHECK_INTERVAL;
+                    if !manual && cfg!(debug_assertions) {
+                        continue;
+                    }
+                    if update_sender
+                        .send_blocking((manual, updater::check()))
+                        .is_err()
+                    {
+                        break;
+                    }
                 }
-                if update_sender.send((manual, updater::check())).is_err() {
-                    break;
-                }
-            }
-        });
+            })
+            .expect("Unable to start update worker");
         let interval = settings.interval.clamp(1, 10);
-        let (sender, receiver) = mpsc::sync_channel(1);
-        std::thread::spawn(move || {
-            let mut collector = metrics::Collector::new();
-            loop {
-                std::thread::sleep(Duration::from_secs(interval));
-                if sender.send(collector.sample()).is_err() {
+        let visible = Arc::new((Mutex::new(window.is_visible()), Condvar::new()));
+        let worker_visibility = visible.clone();
+        let visibility = cx.observe_window_visibility(window, move |_, visibility, _, _| {
+            let (state, wake) = &*visible;
+            *state.lock().unwrap_or_else(|e| e.into_inner()) = visibility.is_visible();
+            wake.notify_one();
+        });
+        let (sender, receiver) = async_channel::bounded(1);
+        std::thread::Builder::new()
+            .name("ftop-collector".into())
+            .spawn(move || {
+                let mut collector = metrics::Collector::new();
+                loop {
+                    std::thread::sleep(Duration::from_secs(interval));
+                    let (state, wake) = &*worker_visibility;
+                    let guard = state.lock().unwrap_or_else(|e| e.into_inner());
+                    let guard = wake
+                        .wait_while(guard, |visible| !*visible)
+                        .unwrap_or_else(|e| e.into_inner());
+                    drop(guard);
+                    if sender.send_blocking(collector.sample()).is_err() {
+                        break;
+                    }
+                }
+            })
+            .expect("Unable to start sampling worker");
+        cx.spawn(async move |view, cx| {
+            while let Ok(data) = receiver.recv().await {
+                let Ok(animate) = view.update(cx, |this, cx| {
+                    let animate =
+                        this.settings.motion && this.displayed_usage.len() == data.cores.len();
+                    if !animate {
+                        this.displayed_usage = data.cores.iter().map(|c| c.usage).collect();
+                    }
+                    this.data = data;
+                    cx.notify();
+                    animate
+                }) else {
                     break;
+                };
+                // Optional, bounded transition: no animation task runs between samples.
+                if animate {
+                    for frame in 1..=6 {
+                        cx.background_executor()
+                            .timer(Duration::from_millis(16))
+                            .await;
+                        if view
+                            .update(cx, |this, cx| {
+                                for (usage, core) in
+                                    this.displayed_usage.iter_mut().zip(&this.data.cores)
+                                {
+                                    *usage = if frame == 6 {
+                                        core.usage
+                                    } else {
+                                        *usage + (core.usage - *usage) * 0.5
+                                    };
+                                }
+                                cx.notify();
+                            })
+                            .is_err()
+                        {
+                            return;
+                        }
+                    }
                 }
             }
-        });
-        cx.spawn(async |view, cx| {
-            loop {
-                cx.background_executor()
-                    .timer(Duration::from_millis(33))
-                    .await;
+        })
+        .detach();
+        cx.spawn(async move |view, cx| {
+            while let Ok((manual, result)) = update_receiver.recv().await {
                 if view
                     .update(cx, |this, cx| {
-                        if let Ok((manual, result)) = this.update_receiver.try_recv() {
-                            match result {
-                                Ok(Some(version)) => {
-                                    this.update_message = Some(format!(
-                                        "Version {version} available · manual download"
-                                    ));
-                                    this.update_version = Some(version);
-                                }
-                                Ok(None) => {
-                                    this.update_message = Some("Up to date".into());
-                                    this.update_version = None;
-                                }
-                                Err(error) => {
-                                    if manual {
-                                        this.update_message =
-                                            Some(format!("Update check failed: {error}"));
-                                    }
-                                }
+                        match result {
+                            Ok(Some(version)) => {
+                                this.update_message =
+                                    Some(format!("Version {version} available · manual download"));
+                                this.update_version = Some(version);
                             }
-                            cx.notify();
-                        }
-                        let mut changed = false;
-                        for (usage, core) in this.displayed_usage.iter_mut().zip(&this.data.cores) {
-                            let delta = core.usage - *usage;
-                            if delta.abs() > 0.05 {
-                                *usage += if this.settings.motion {
-                                    delta * 0.14
+                            Ok(None) => {
+                                this.update_message = Some("Up to date".into());
+                                this.update_version = None;
+                            }
+                            Err(error) => {
+                                if manual {
+                                    this.update_message =
+                                        Some(format!("Update check failed: {error}"));
                                 } else {
-                                    delta
-                                };
-                                changed = true;
+                                    return;
+                                }
                             }
                         }
-                        if changed {
-                            cx.notify();
-                        }
-                        if let Ok(data) = this.receiver.try_recv() {
-                            if this.displayed_usage.len() != data.cores.len() {
-                                this.displayed_usage = data.cores.iter().map(|c| c.usage).collect();
-                            }
-                            this.data = data;
-                            cx.notify();
-                        }
+                        cx.notify();
                     })
                     .is_err()
                 {
@@ -120,13 +167,13 @@ impl Monitor {
             data: Snapshot::default(),
             displayed_usage: Vec::new(),
 
-            receiver,
+            _visibility: visibility,
             settings,
             controls: false,
             by_memory: false,
             selected: None,
             error: None,
-            update_receiver,
+
             update_request,
             update_message: None,
             update_version: None,
@@ -137,6 +184,24 @@ impl Monitor {
     }
     fn accent(&self) -> u32 {
         [0x5b9bff, 0xf3f4f6, 0xff8468][self.settings.palette % 3]
+    }
+    fn core_color(&self, group: usize) -> u32 {
+        let last = self
+            .data
+            .cores
+            .iter()
+            .map(|c| c.group)
+            .max()
+            .unwrap_or(0)
+            .max(1);
+        let start = self.accent();
+        let end = [0x45d1bd, 0x9aa1ad, 0xffc857][self.settings.palette % 3];
+        let t = group as f32 / last as f32;
+        [16, 8, 0].into_iter().fold(0, |color, shift| {
+            let a = ((start >> shift) & 255) as f32;
+            let b = ((end >> shift) & 255) as f32;
+            color | (((a + (b - a) * t) as u32) << shift)
+        })
     }
     fn muted(&self) -> u32 {
         if self.settings.light {
@@ -168,32 +233,53 @@ impl Monitor {
                 "↓" => "<path d='M12 3v17m-6-6 6 6 6-6'/>",
                 "↑" => "<path d='M12 21V4m-6 6 6-6 6 6'/>",
                 "ϟ" => "<path d='m14 2-9 12h6l-1 8 9-12h-6z'/>",
+                "⌂" => "<path d='M5 6h14v11H5zM2 20h20'/>",
                 "♧" => "<path d='M9 14V5a3 3 0 0 1 6 0v9a5 5 0 1 1-6 0zM12 8v9'/>",
                 _ => "<path d='m12 3 9 5-9 5-9-5zm-9 9 9 5 9-5m-18 5 9 5 9-5'/>",
             }).as_bytes()).size(px(11.)).text_color(rgb(color)))
     }
     fn gauge_badge(&self, glyph: &str, color: u32, progress: f32) -> Div {
-        let fraction = (progress / 100.).clamp(0.001, 0.9999);
-        let angle = fraction * std::f32::consts::TAU - std::f32::consts::FRAC_PI_2;
-        let (x, y) = (10. + 9. * angle.cos(), 10. + 9. * angle.sin());
-        let arc = format!(
-            r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M 10 1 A 9 9 0 {} 1 {x} {y}" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>"#,
-            if fraction > 0.5 { 1 } else { 0 }
-        );
+        let fraction = (progress / 100.).clamp(0., 1.);
         div()
             .relative()
             .size(px(20.))
             .child(self.badge(glyph, color))
             .child(
-                svg()
-                    .data(arc.as_bytes())
-                    .size(px(20.))
-                    .absolute()
-                    .inset_0()
-                    .text_color(rgb(color)),
+                canvas(
+                    |_, _, _| (),
+                    move |bounds, _, window, _| {
+                        if fraction <= 0. {
+                            return;
+                        }
+                        let mut path = PathBuilder::stroke(px(2.));
+                        let center = bounds.center();
+                        let segments = (fraction * 48.).ceil().max(1.) as usize;
+                        for step in 0..=segments {
+                            let angle = std::f32::consts::TAU * fraction * step as f32
+                                / segments as f32
+                                - std::f32::consts::FRAC_PI_2;
+                            let position = point(
+                                center.x + px(9. * angle.cos()),
+                                center.y + px(9. * angle.sin()),
+                            );
+                            if step == 0 {
+                                path.move_to(position);
+                            } else {
+                                path.line_to(position);
+                            }
+                        }
+                        if let Ok(path) = path.build() {
+                            window.paint_path(path, rgb(color));
+                        }
+                    },
+                )
+                .size(px(20.))
+                .absolute()
+                .inset_0(),
             )
     }
     fn figure(&self, glyph: &str, value: String, color: u32) -> Div {
+        let (number, unit) = value.split_once(' ').unwrap_or((&value, ""));
         div()
             .flex()
             .items_center()
@@ -207,7 +293,20 @@ impl Monitor {
                 ),
                 _ => self.badge(glyph, color),
             })
-            .child(value)
+            .child(
+                div()
+                    .flex()
+                    .items_baseline()
+                    .gap(px(3.))
+                    .child(number.to_owned())
+                    .child(
+                        div()
+                            .text_size(px(10.5))
+                            .font_weight(FontWeight::NORMAL)
+                            .text_color(rgb(self.muted()))
+                            .child(unit.to_owned()),
+                    ),
+            )
     }
     fn process_list(&self, rows: usize, cx: &mut Context<Self>) -> Div {
         let mut list = self.data.processes.clone();
@@ -226,10 +325,25 @@ impl Monitor {
                     .gap(px(6.))
                     .child(
                         Button::new("cpu-sort")
-                            .label("CPU")
-                            .selected(!self.by_memory)
-                            .small()
-                            .ghost()
+                            .accessibility_label("Sort by CPU")
+                            .size(px(20.))
+                            .rounded_full()
+                            .child(
+                                self.badge(
+                                    "▦",
+                                    if !self.by_memory {
+                                        0x182130
+                                    } else {
+                                        self.muted()
+                                    },
+                                )
+                                .bg(rgb(if !self.by_memory {
+                                    self.accent()
+                                } else {
+                                    self.track()
+                                })),
+                            )
+                            .focus_visible(|style| style.border_1().border_color(rgb(0x5b9bff)))
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.by_memory = false;
                                 cx.notify();
@@ -237,10 +351,25 @@ impl Monitor {
                     )
                     .child(
                         Button::new("mem-sort")
-                            .label("Memory")
-                            .selected(self.by_memory)
-                            .small()
-                            .ghost()
+                            .accessibility_label("Sort by memory")
+                            .size(px(20.))
+                            .rounded_full()
+                            .child(
+                                self.badge(
+                                    "▥",
+                                    if self.by_memory {
+                                        0x182130
+                                    } else {
+                                        self.muted()
+                                    },
+                                )
+                                .bg(rgb(if self.by_memory {
+                                    self.accent()
+                                } else {
+                                    self.track()
+                                })),
+                            )
+                            .focus_visible(|style| style.border_1().border_color(rgb(0x5b9bff)))
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.by_memory = true;
                                 cx.notify();
@@ -307,11 +436,16 @@ impl Render for Monitor {
         let compact = size.height < px(250.);
         let muted = self.muted();
         let accent = self.accent();
+        let memory_color = match self.data.pressure {
+            Some(2) => 0xffc857,
+            Some(4) => 0xff6970,
+            _ => 0x4dcc7c,
+        };
         let memory_fraction = self.data.memory as f32 / self.data.total_memory.max(1) as f32;
         let core_height = if wide {
-            (f32::from(size.height) - 245.).clamp(60., 340.)
+            (f32::from(size.height) - 275.).clamp(60., 340.)
         } else {
-            (f32::from(size.height) - 360.).clamp(50., 160.)
+            (f32::from(size.height) - 390.).clamp(50., 160.)
         };
         let core_count = self.data.cores.len().max(1) as f32;
         let available = (f32::from(size.width) * if wide { 0.52 } else { 1.0 } - 30.).max(1.);
@@ -343,10 +477,18 @@ impl Render for Monitor {
                 .items_center()
                 .justify_between()
                 .child(
-                    self.figure("▦", format!("{:.0} %", self.data.cpu), accent)
-                        .on_mouse_down(MouseButton::Left, |_, window, _| window.start_window_move())
-                        .text_size(px(17.))
-                        .font_weight(FontWeight::SEMIBOLD),
+                    self.figure(
+                        "▦",
+                        if self.data.cores.is_empty() {
+                            "— %".into()
+                        } else {
+                            format!("{:.0} %", self.data.cpu)
+                        },
+                        accent,
+                    )
+                    .on_mouse_down(MouseButton::Left, |_, window, _| window.start_window_move())
+                    .text_size(px(17.))
+                    .font_weight(FontWeight::SEMIBOLD),
                 )
                 .child(
                     Button::new("settings")
@@ -458,26 +600,16 @@ impl Render for Monitor {
                                             / 100.)
                                             .max(4.)))
                                         .rounded(px(8.))
-                                        .bg(rgb(accent)),
+                                        .bg(rgb(self.core_color(c.group))),
                                 )
                                 .child(
                                     div()
                                         .absolute()
                                         .left(px(core_width * 0.2))
                                         .bottom(px(core_height
-                                            * (c.mhz as f32
-                                                / self
-                                                    .data
-                                                    .cores
-                                                    .iter()
-                                                    .map(|c| c.mhz)
-                                                    .max()
-                                                    .unwrap_or(1)
-                                                    .max(1)
-                                                    as f32)
-                                                .min(1.)))
+                                            * (c.mhz as f32 / c.max_mhz.max(1) as f32).min(1.)))
                                         .w(px(core_width * 0.6))
-                                        .h(px(1.5))
+                                        .h(px(if c.mhz > 0 && c.max_mhz > 0 { 1.5 } else { 0. }))
                                         .rounded_full()
                                         .bg(rgb(muted)),
                                 ),
@@ -496,7 +628,7 @@ impl Render for Monitor {
                         .tooltip({
                             let detail = format!(
                                 "Core {} · {:.1}% · reported {} MHz",
-                                i + 1,
+                                c.id + 1,
                                 c.usage,
                                 c.mhz
                             );
@@ -515,7 +647,7 @@ impl Render for Monitor {
                             gb(self.data.memory),
                             gb(self.data.total_memory)
                         ),
-                        0x4dcc7c,
+                        memory_color,
                     )
                     .text_size(px(17.)),
                 )
@@ -530,7 +662,7 @@ impl Render for Monitor {
                                 .h_full()
                                 .w(relative(memory_fraction.clamp(0., 1.)))
                                 .rounded_full()
-                                .bg(rgb(0x4dcc7c)),
+                                .bg(rgb(memory_color)),
                         ),
                 )
                 .child(
@@ -539,9 +671,19 @@ impl Render for Monitor {
                         .justify_between()
                         .text_color(rgb(muted))
                         .text_size(px(10.5))
-                        .child("Compressed —")
+                        .child(
+                            self.data
+                                .compressed
+                                .map(|bytes| format!("Compressed {} GB", gb(bytes)))
+                                .unwrap_or_else(|| "Compressed —".into()),
+                        )
                         .child(format!(
-                            "Swap {} / {} GB",
+                            "{} {} / {} GB",
+                            if self.data.swap_label.is_empty() {
+                                "Swap"
+                            } else {
+                                self.data.swap_label
+                            },
                             gb(self.data.swap),
                             gb(self.data.total_swap)
                         )),
@@ -563,32 +705,62 @@ impl Render for Monitor {
                 .as_ref()
                 .map(|(label, _)| label.clone())
                 .unwrap_or_else(|| "Temperature unavailable".into());
-            readings = readings.child(
-                div()
-                    .flex()
-                    .flex_wrap()
-                    .gap(px(8.))
-                    .justify_between()
-                    .text_color(rgb(muted))
-                    .child(self.figure("▧", "GPU —".into(), 0xb294ff))
-                    .child(self.figure("ϟ", "— W".into(), muted))
-                    .child(
-                        div()
-                            .id("temperature")
-                            .child(
-                                self.figure(
-                                    "♧",
-                                    self.data
-                                        .temperature
-                                        .as_ref()
-                                        .map(|(_, t)| format!("{t:.0}°"))
-                                        .unwrap_or_else(|| "— °C".into()),
-                                    muted,
-                                ),
-                            )
-                            .tooltip(move |_, cx| chrome::tooltip(sensor.clone(), cx)),
-                    ),
-            );
+            let gpu = self
+                .data
+                .gpu_memory
+                .map(|bytes| format!("{} GB", gb(bytes)))
+                .or_else(|| self.data.gpu_usage.map(|usage| format!("{usage:.0} %")))
+                .unwrap_or_else(|| "—".into());
+            readings = readings
+                .child(
+                    div()
+                        .flex()
+                        .justify_between()
+                        .text_color(rgb(muted))
+                        .child(self.figure("▧", gpu, 0xb294ff))
+                        .child(
+                            self.figure(
+                                "ϟ",
+                                self.data
+                                    .gpu_power
+                                    .map(|watts| format!("{watts:.1} W"))
+                                    .unwrap_or_else(|| "— W".into()),
+                                0xb294ff,
+                            ),
+                        ),
+                )
+                .child(
+                    div()
+                        .flex()
+                        .justify_between()
+                        .text_color(rgb(muted))
+                        .child(
+                            self.figure(
+                                "⌂",
+                                self.data
+                                    .power
+                                    .map(|watts| format!("{watts:.1} W"))
+                                    .unwrap_or_else(|| "— W".into()),
+                                muted,
+                            ),
+                        )
+                        .child(
+                            div()
+                                .id("temperature")
+                                .child(
+                                    self.figure(
+                                        "♧",
+                                        self.data
+                                            .temperature
+                                            .as_ref()
+                                            .map(|(_, t)| format!("{t:.0}°"))
+                                            .unwrap_or_else(|| "— °C".into()),
+                                        muted,
+                                    ),
+                                )
+                                .tooltip(move |_, cx| chrome::tooltip(sensor.clone(), cx)),
+                        ),
+                );
         }
         let available_rows = if wide {
             f32::from(size.height) - 100.
@@ -670,6 +842,9 @@ impl Render for Monitor {
                 }
             }
         }
+        if let Some(error) = &self.data.error {
+            panel = panel.child(error.clone());
+        }
         if let Some(error) = &self.error {
             panel = panel.child(format!("Could not save settings: {error}"));
         }
@@ -720,7 +895,7 @@ fn main() {
                 cx,
                 |window, cx| {
                     window.set_window_title("ftop");
-                    cx.new(Monitor::new)
+                    cx.new(|cx| Monitor::new(window, cx))
                 },
             )
             .expect("Unable to open ftop window");

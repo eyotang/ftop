@@ -1,6 +1,6 @@
 # ftop · GPUI Kit
 
-使用 Rust / GPUI Kit 复刻 [Nongfsq/ftop](https://github.com/Nongfsq/ftop) 的浮动系统监视面板。保留深色玻璃底色、蓝色胶囊核心柱、绿色内存条、紧凑进程列表和 Sea / Graphite / Warm 配色。原版 MIT 许可证保留于 LICENSE。
+使用 Rust / GPUI Kit 复刻 [Nongfsq/ftop](https://github.com/Nongfsq/ftop) 的浮动系统监视面板。使用 GPUI Kit Base 自绘最外层透明圆角窗口，保留深色玻璃底色、蓝色胶囊核心柱、绿色内存条、紧凑进程列表和 Sea / Graphite / Warm 配色。原版 MIT 许可证保留于 LICENSE。
 
 当前是开发中的原生实现，还未达到原版功能和视觉完全一致。CPU、内存、交换空间、网络速率和进程来自 sysinfo，后台线程采集。CPU 进程占比按整机归一化；同名进程聚合，可点击查看详情。设置存储在系统配置目录 `ftop-gpui/config.json`。CPU 频率为系统提供的采样值，不能等同于原版 Apple Silicon 私有接口的实时频率。温度读取系统可用传感器，悬浮可查看实际传感器名称。GPU、压缩内存和功耗尚未接入，显示 `—`。
 

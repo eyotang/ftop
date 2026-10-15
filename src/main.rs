@@ -1,7 +1,9 @@
+mod chrome;
 mod metrics;
 mod settings;
 mod updater;
-use gpui_kit::component::{button::*, tooltip::Tooltip, *};
+use chrome::PanelButton;
+use gpui_kit::base::Button;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use metrics::{Snapshot, gb, rate};
@@ -160,7 +162,7 @@ impl Monitor {
             .bg(rgb(self.track()))
             .text_color(rgb(color))
             .text_size(px(12.))
-            .child(Icon::default().data(format!(r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><g fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">{}</g></svg>"#, match glyph {
+            .child(svg().data(format!(r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><g fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">{}</g></svg>"#, match glyph {
                 "▦" | "◌" => "<rect x='6' y='6' width='12' height='12' rx='2'/><path d='M9 2v4m6-4v4M9 18v4m6-4v4M2 9h4m-4 6h4m12-6h4m-4 6h4'/>",
                 "▥" => "<rect x='3' y='7' width='18' height='10' rx='2'/><path d='M7 10v4m5-4v4m5-4v4M7 17v3m5-3v3m5-3v3'/>",
                 "↓" => "<path d='M12 3v17m-6-6 6 6 6-6'/>",
@@ -168,7 +170,7 @@ impl Monitor {
                 "ϟ" => "<path d='m14 2-9 12h6l-1 8 9-12h-6z'/>",
                 "♧" => "<path d='M9 14V5a3 3 0 0 1 6 0v9a5 5 0 1 1-6 0zM12 8v9'/>",
                 _ => "<path d='m12 3 9 5-9 5-9-5zm-9 9 9 5 9-5m-18 5 9 5 9-5'/>",
-            }).as_bytes()).size(px(11.)))
+            }).as_bytes()).size(px(11.)).text_color(rgb(color)))
     }
     fn gauge_badge(&self, glyph: &str, color: u32, progress: f32) -> Div {
         let fraction = (progress / 100.).clamp(0.001, 0.9999);
@@ -183,7 +185,7 @@ impl Monitor {
             .size(px(20.))
             .child(self.badge(glyph, color))
             .child(
-                Icon::default()
+                svg()
                     .data(arc.as_bytes())
                     .size(px(20.))
                     .absolute()
@@ -322,7 +324,7 @@ impl Render for Monitor {
             .min_h_full()
             .p(px(15.))
             .gap(px(12.))
-            .rounded(px(18.))
+            .rounded(px(chrome::RADIUS - 1.))
             .bg(if self.settings.light {
                 rgba(0xf1f4f7ed)
             } else {
@@ -333,6 +335,7 @@ impl Render for Monitor {
             } else {
                 0xe4e5ec
             }))
+            .font_family(chrome::FONT)
             .text_size(px(12.));
         panel = panel.child(
             div()
@@ -408,15 +411,6 @@ impl Render for Monitor {
                                         _ => this.settings.motion = !this.settings.motion,
                                     };
                                     this.save();
-                                    Theme::change(
-                                        if this.settings.light {
-                                            ThemeMode::Light
-                                        } else {
-                                            ThemeMode::Dark
-                                        },
-                                        None,
-                                        cx,
-                                    );
                                     cx.notify();
                                 }))
                         }),
@@ -506,7 +500,7 @@ impl Render for Monitor {
                                 c.usage,
                                 c.mhz
                             );
-                            move |window, cx| Tooltip::new(detail.clone()).build(window, cx)
+                            move |_, cx| chrome::tooltip(detail.clone(), cx)
                         })
                 }),
             ));
@@ -592,9 +586,7 @@ impl Render for Monitor {
                                     muted,
                                 ),
                             )
-                            .tooltip(move |window, cx| {
-                                Tooltip::new(sensor.clone()).build(window, cx)
-                            }),
+                            .tooltip(move |_, cx| chrome::tooltip(sensor.clone(), cx)),
                     ),
             );
         }
@@ -681,7 +673,7 @@ impl Render for Monitor {
         if let Some(error) = &self.error {
             panel = panel.child(format!("Could not save settings: {error}"));
         }
-        div()
+        let content = div()
             .id("panel-scroll")
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
                 if event.keystroke.key == "escape" {
@@ -699,7 +691,8 @@ impl Render for Monitor {
             )
             .size_full()
             .overflow_y_scroll()
-            .child(panel)
+            .child(panel);
+        chrome::frame(content, window)
     }
 }
 fn main() {
@@ -711,15 +704,6 @@ fn main() {
         .with_assets(gpui_kit::assets::Assets)
         .run(|cx| {
             gpui_kit::init(cx);
-            Theme::change(
-                if Settings::load().light {
-                    ThemeMode::Light
-                } else {
-                    ThemeMode::Dark
-                },
-                None,
-                cx,
-            );
             gpui_kit::open_window(
                 WindowOptions {
                     window_bounds: Some(WindowBounds::Windowed(Bounds::centered(

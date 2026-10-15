@@ -9,11 +9,13 @@ Framework: gpui-kit 0.7.3; Rust 1.98.1. This is an implementation in progress, n
 | macOS 14+ | CI configured, not yet run | Not tested | Not tested |
 | Windows 11 x86_64 | CI configured, not yet run | Not tested | Not tested |
 
-`cargo test`: 4 passed. Covers real system sampling, memory/CPU bounds, throughput units, stable version ordering, no downgrade, malformed versions, release-tag injection and oversized manifests. The release-manifest script was exercised with a temporary asset; generated checksum and version matched the fixture. `cargo fmt --check` passed.
+`cargo test`: 5 passed. Covers real system sampling, memory/CPU bounds, throughput units, stable version ordering, no downgrade, malformed versions, release-tag injection and oversized manifests. The release-manifest script was exercised with a temporary asset; generated checksum and version matched the fixture. `cargo fmt --check` passed.
 
 The local host has the `libxkbcommon-x11.so.0` runtime but lacks the development symlink. For local linking only, `/tmp/ftop-native-libs/libxkbcommon-x11.so` points to that installed runtime, and builds/tests use `LIBRARY_PATH=/tmp/ftop-native-libs`. Normal Ubuntu build environments should install `libxkbcommon-x11-dev`.
 
 X11 first launch failed inside upstream `zed-xim` with `UnsupportedEncoding` against the host input method. Explicit `XMODIFIERS=@im=none` allowed launch. This workaround is not set globally or silently in the application. Wayland does not need it. X11 input-method compatibility remains unresolved.
+
+The floating window now uses application-owned GPUI Kit Base chrome: transparent outer surface, 18-point rounded outline and shadow, and edge resize handling. This avoids the styled component layer’s intentionally rectangular Linux window border. A geometry test verifies corner resize handling and that content clicks are not claimed as resize gestures.
 
 Native screenshots in `docs/evidence/` are from this application, with real readings, not browser renders. The inspected layouts revealed and led to fixes for content clipping, client shadow insets, oversized CPU columns and inconsistent control themes. Final screenshots were refreshed after the layout and gauge fixes; they remain local and are excluded from public Git history because they contain real process readings.
 

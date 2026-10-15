@@ -29,8 +29,7 @@ struct Monitor {
     error: Option<String>,
 
     update_request: mpsc::SyncSender<()>,
-    update_message: Option<String>,
-    update_version: Option<String>,
+    updates: updater::Status,
 }
 impl Monitor {
     fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
@@ -58,7 +57,14 @@ impl Monitor {
                         continue;
                     }
                     if update_sender
-                        .send_blocking((manual, updater::check()))
+                        .send_blocking(updater::Event::Checking)
+                        .is_err()
+                    {
+                        break;
+                    }
+                    let result = updater::check();
+                    if update_sender
+                        .send_blocking(updater::Event::Finished { manual, result })
                         .is_err()
                     {
                         break;
@@ -136,28 +142,10 @@ impl Monitor {
         })
         .detach();
         cx.spawn(async move |view, cx| {
-            while let Ok((manual, result)) = update_receiver.recv().await {
+            while let Ok(event) = update_receiver.recv().await {
                 if view
                     .update(cx, |this, cx| {
-                        match result {
-                            Ok(Some(version)) => {
-                                this.update_message =
-                                    Some(format!("Version {version} available · manual download"));
-                                this.update_version = Some(version);
-                            }
-                            Ok(None) => {
-                                this.update_message = Some("Up to date".into());
-                                this.update_version = None;
-                            }
-                            Err(error) => {
-                                if manual {
-                                    this.update_message =
-                                        Some(format!("Update check failed: {error}"));
-                                } else {
-                                    return;
-                                }
-                            }
-                        }
+                        this.updates.apply(event);
                         cx.notify();
                     })
                     .is_err()
@@ -179,8 +167,7 @@ impl Monitor {
             error: None,
 
             update_request,
-            update_message: None,
-            update_version: None,
+            updates: updater::Status::default(),
         }
     }
     fn save(&mut self) {
@@ -733,6 +720,23 @@ impl Render for Monitor {
                         })),
                 ),
         );
+        if let Some(version) = self.updates.visible_version() {
+            if let Ok(url) = updater::release_page(version) {
+                panel = panel.child(
+                    div().id("update-card").rounded(px(10.)).p(px(10.)).gap(px(6.)).flex().flex_col()
+                        .bg(rgba(0x5b9bff20)).border_1().border_color(rgba(0x5b9bff55))
+                        .child(div().font_weight(FontWeight::SEMIBOLD).child(self.t(&format!("Update available: ftop {version}"))))
+                        .child(div().text_size(px(10.5)).text_color(rgb(muted))
+                            .child(self.t(&format!("Current version: {} · New version: {version}", env!("CARGO_PKG_VERSION")))))
+                        .child(div().text_size(px(10.5)).child(self.t("Detected automatically. Open the download page to install the package for your platform.")))
+                        .child(div().flex().flex_wrap().gap(px(8.))
+                            .child(Button::new("update-card-download").label(self.t("Open download page")).small()
+                                .bg(rgba(0x5b9bff30)).on_click(move |_, _, cx| cx.open_url(&url)))
+                            .child(Button::new("update-card-later").label(self.t("Later")).small()
+                                .on_click(cx.listener(|this, _, _, cx| { this.updates.dismiss(); cx.notify(); }))))
+                );
+            }
+        }
         if self.controls {
             panel =
                 panel.child(
@@ -1085,30 +1089,49 @@ impl Render for Monitor {
                     .tooltip(move |_, cx| chrome::tooltip(status.clone(), cx)),
             );
             panel = panel.child(
+                div()
+                    .text_size(px(10.5))
+                    .text_color(rgb(muted))
+                    .child(format!("ftop {}", env!("CARGO_PKG_VERSION"))),
+            );
+            panel = panel.child(
                 Button::new("check-update")
-                    .label(self.t("Check for updates"))
+                    .label(self.t(if self.updates.checking {
+                        "Checking…"
+                    } else {
+                        "Check for updates"
+                    }))
+                    .disabled(self.updates.checking)
                     .small()
                     .ghost()
                     .on_click(cx.listener(|this, _, _, cx| {
-                        let _ = this.update_request.try_send(());
-                        this.update_message = Some("Checking…".into());
+                        if !this.updates.begin_manual() {
+                            return;
+                        }
+                        if this.update_request.try_send(()).is_err() {
+                            this.updates.apply(updater::Event::Finished {
+                                manual: true,
+                                result: Err("Update service unavailable".into()),
+                            });
+                        }
                         cx.notify();
                     })),
             );
 
             panel = panel.child(
                 div().text_size(px(10.5)).text_color(rgb(muted)).child(
-                    self.update_message
+                    self.updates
+                        .message
                         .clone()
                         .map(|text| self.t(&text))
                         .unwrap_or_else(|| self.t("Updates: manual download · checks daily")),
                 ),
             );
-            if let Some(version) = &self.update_version {
+            if let Some(version) = &self.updates.version {
                 if let Ok(url) = updater::release_page(version) {
                     panel = panel.child(
                         Button::new("download-update")
-                            .label(self.t("Open release"))
+                            .label(self.t("Open download page"))
                             .small()
                             .ghost()
                             .on_click(move |_, _, cx| cx.open_url(&url)),

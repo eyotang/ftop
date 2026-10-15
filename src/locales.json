@@ -550,5 +550,47 @@
     "GlobalMemoryStatusEx 调用失败",
     "GlobalMemoryStatusEx 呼び出し失敗",
     "GlobalMemoryStatusEx 호출 실패"
+  ],
+  [
+    "Update available: ftop",
+    "发现新版本：ftop",
+    "更新があります：ftop",
+    "새 버전 사용 가능: ftop"
+  ],
+  [
+    "Current version:",
+    "当前版本：",
+    "現在のバージョン：",
+    "현재 버전:"
+  ],
+  [
+    "New version:",
+    "新版本：",
+    "新しいバージョン：",
+    "새 버전:"
+  ],
+  [
+    "Detected automatically. Open the download page to install the package for your platform.",
+    "已自动检测到新版本。打开下载页，安装适合当前平台的软件包。",
+    "新しいバージョンを自動検出しました。ダウンロードページからこの環境向けのパッケージをインストールしてください。",
+    "새 버전을 자동으로 감지했습니다. 다운로드 페이지에서 현재 플랫폼용 패키지를 설치하세요."
+  ],
+  [
+    "Open download page",
+    "打开下载页",
+    "ダウンロードページを開く",
+    "다운로드 페이지 열기"
+  ],
+  [
+    "Later",
+    "稍后",
+    "あとで",
+    "나중에"
+  ],
+  [
+    "Update service unavailable",
+    "更新服务不可用",
+    "更新サービスを利用できません",
+    "업데이트 서비스를 사용할 수 없습니다"
   ]
 ]

@@ -38,6 +38,8 @@ macOS 需要 Xcode Command Line Tools；Windows 使用 MSVC Rust 工具链与 Vi
 
 参考本机 Metra 项目的更新策略：启动 20 秒后、之后每 24 小时读取本仓库公开 Release 的 `latest.json`；HTTPS、15 秒超时、64 KiB 上限，拒绝非稳定版号与降级。调试构建不自动检查。当前发行形态为手动下载，发现新版本后打开固定版本 Release 页面，不执行未验签安装包。
 
+应用内入口是 **••• → 检查更新 / Check for updates**。检查时按钮显示“正在检查”并防止重复请求。自动发现新版后，即使未打开设置，主界面也会显示更新卡片：当前版本、新版本、**打开下载页**和**稍后**。点击打开检测到的固定版本 Release 页面，下载并手动替换对应平台的软件包；“稍后”仅在本次运行中隐藏该版本提示，手动检查可再次显示。
+
 Metra 的 Windows NSIS 应用内签名更新依赖 Tauri，本项目尚未实现对应的 GPUI 安装器与签名更新通道。不能将空 `platforms` 清单视为应用内更新可用。
 
 构建、验证安装包后，运行 `python3 scripts/release-manifest.py VERSION ASSET_DIRECTORY` 生成 `latest.json` 和 `SHA256SUMS`。发布描述使用 [发布模板](docs/releases/RELEASE_TEMPLATE.md)，其中包含 macOS `xattr` 命令。此脚本不会上传或发布。

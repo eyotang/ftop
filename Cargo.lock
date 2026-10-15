@@ -1685,10 +1685,12 @@ dependencies = [
  "dirs 6.0.0",
  "gpui-kit",
  "libc",
+ "raw-window-handle",
  "reqwest",
  "serde",
  "serde_json",
  "sysinfo 0.37.2",
+ "x11rb",
 ]
 
 [[package]]

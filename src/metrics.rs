@@ -31,6 +31,7 @@ pub struct Snapshot {
     pub pressure: Option<u32>,
     pub gpu_usage: Option<f32>,
     pub gpu_memory: Option<u64>,
+    pub gpu_frequency: Option<(u64, u64)>,
     pub gpu_power: Option<f32>,
     pub power: Option<f32>,
     pub swap_label: &'static str,

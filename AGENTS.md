@@ -1,0 +1,10 @@
+# ftop development contract
+
+- This is a Rust / GPUI Kit desktop replica of Nongfsq/ftop for macOS, Windows and Ubuntu. Preserve its floating glass panel, true outer rounded corners, capsule core columns, round gauge badges, restrained typography and current-state-only design.
+- Keep platform collection in `src/metrics/platform/`. The UI consumes the shared snapshot; it must not query OS APIs. Linux uses procfs/sysfs; macOS hardware uses the attributed upstream C bridge; Windows uses native counters and Windows-specific memory semantics. Never substitute nominal clocks for unavailable instantaneous per-core frequencies, or Commit for Swap without labeling it.
+- Hardware failures are unavailable values, not fabricated zeros. Do not put demo readings in production.
+- Sampling and network checks run off the UI thread. Updates are event-driven; do not restore a permanent per-frame full-window polling loop. Keep motion optional and bounded, and pause sampling when the platform reports the window invisible.
+- The resource target is under 1% of one core at a one-second refresh; current measured gaps are documented in `docs/PERFORMANCE.md`. Do not confuse whole-machine percentages with single-core percentages or claim the target passed without measurements.
+- Validate with `cargo fmt --check`, `cargo check --locked`, and `cargo test --locked`, plus native screenshots for appearance changes. Install the Ubuntu dependencies listed in README. CI must continue to check all three systems; compilation does not prove native UI, hardware, installer or performance acceptance.
+- Keep raw local desktop/process screenshots and benchmark records under ignored `docs/evidence/`. Publish only reviewed, non-sensitive aggregate evidence. Preserve upstream attribution and the MIT license.
+- The Metra-inspired update checker currently uses manual release downloads; do not describe unsigned portable packages as signed in-app updates. Release descriptions must retain the macOS `xattr` instruction from the template.

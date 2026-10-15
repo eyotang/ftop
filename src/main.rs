@@ -1,5 +1,6 @@
 mod chrome;
 mod metrics;
+mod sampling_gate;
 mod settings;
 mod updater;
 use chrome::PanelButton;
@@ -8,10 +9,7 @@ use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use metrics::{Snapshot, gb, rate};
 use settings::Settings;
-use std::{
-    sync::{Arc, Condvar, Mutex, mpsc},
-    time::Duration,
-};
+use std::{sync::mpsc, time::Duration};
 
 struct Monitor {
     data: Snapshot,
@@ -62,13 +60,18 @@ impl Monitor {
                 }
             })
             .expect("Unable to start update worker");
+        if std::env::args().any(|arg| arg == "--benchmark-hidden") {
+            cx.spawn_in(window, async |_, cx| {
+                cx.background_executor().timer(Duration::from_secs(3)).await;
+                let _ = cx.update(|window, _| window.minimize_window());
+            })
+            .detach();
+        }
         let interval = settings.interval.clamp(1, 10);
-        let visible = Arc::new((Mutex::new(window.is_visible()), Condvar::new()));
+        let visible = sampling_gate::SamplingGate::new(window);
         let worker_visibility = visible.clone();
         let visibility = cx.observe_window_visibility(window, move |_, visibility, _, _| {
-            let (state, wake) = &*visible;
-            *state.lock().unwrap_or_else(|e| e.into_inner()) = visibility.is_visible();
-            wake.notify_one();
+            visible.set_visible(visibility.is_visible())
         });
         let (sender, receiver) = async_channel::bounded(1);
         std::thread::Builder::new()
@@ -77,12 +80,7 @@ impl Monitor {
                 let mut collector = metrics::Collector::new();
                 loop {
                     std::thread::sleep(Duration::from_secs(interval));
-                    let (state, wake) = &*worker_visibility;
-                    let guard = state.lock().unwrap_or_else(|e| e.into_inner());
-                    let guard = wake
-                        .wait_while(guard, |visible| !*visible)
-                        .unwrap_or_else(|e| e.into_inner());
-                    drop(guard);
+                    worker_visibility.wait();
                     if sender.send_blocking(collector.sample()).is_err() {
                         break;
                     }
@@ -238,6 +236,75 @@ impl Monitor {
                 _ => "<path d='m12 3 9 5-9 5-9-5zm-9 9 9 5 9-5m-18 5 9 5 9-5'/>",
             }).as_bytes()).size(px(11.)).text_color(rgb(color)))
     }
+    fn bar(
+        &self,
+        usage: f32,
+        frequency: (u64, u64),
+        width: f32,
+        height: f32,
+        color: u32,
+    ) -> impl IntoElement {
+        let track = self.track();
+        let muted = self.muted();
+        canvas(
+            |_, _, _| (),
+            move |bounds, _, window, _| {
+                let radius = px((width / 2.).min(8.));
+                window.paint_quad(fill(bounds, rgb(track)).corner_radii(radius));
+                let filled = px((height * usage.clamp(0., 100.) / 100.).max(4.).min(height));
+                let area = Bounds::new(
+                    point(bounds.left(), bounds.bottom() - filled),
+                    size(bounds.size.width, filled),
+                );
+                window.paint_quad(fill(area, rgb(color)).corner_radii(radius));
+                if frequency.0 > 0 && frequency.1 > 0 {
+                    let top = bounds.bottom()
+                        - px(height * (frequency.0 as f32 / frequency.1 as f32).min(1.));
+                    let tick = Bounds::new(
+                        point(bounds.left() + px(width * 0.2), top),
+                        size(px(width * 0.6), px(1.5)),
+                    );
+                    window.paint_quad(fill(tick, rgb(muted)).corner_radii(px(0.75)));
+                }
+            },
+        )
+        .w(px(width))
+        .h(px(height))
+    }
+    fn gpu_column(&self, width: f32, height: f32, numbered: bool) -> Div {
+        let frequency = self.data.gpu_frequency.unwrap_or((0, 0));
+        div()
+            .ml(px(10.))
+            .flex()
+            .flex_col()
+            .items_center()
+            .gap(px(3.))
+            .child(self.bar(
+                self.data.gpu_usage.unwrap_or(0.),
+                frequency,
+                width,
+                height,
+                0xb294ff,
+            ))
+            .when(numbered, |column| {
+                column
+                    .child(
+                        div()
+                            .text_size(px(10.))
+                            .child(format!("{:.0}", self.data.gpu_usage.unwrap_or(0.))),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(8.5))
+                            .text_color(rgb(self.muted()))
+                            .child(if frequency.0 > 0 {
+                                format!("{:.1}", frequency.0 as f32 / 1000.)
+                            } else {
+                                "—".into()
+                            }),
+                    )
+            })
+    }
     fn gauge_badge(&self, glyph: &str, color: u32, progress: f32) -> Div {
         let fraction = (progress / 100.).clamp(0., 1.);
         div()
@@ -309,7 +376,7 @@ impl Monitor {
             )
     }
     fn process_list(&self, rows: usize, cx: &mut Context<Self>) -> Div {
-        let mut list = self.data.processes.clone();
+        let mut list: Vec<_> = self.data.processes.iter().collect();
         if self.by_memory {
             list.sort_by(|a, b| b.memory.cmp(&a.memory));
         }
@@ -448,7 +515,15 @@ impl Render for Monitor {
             (f32::from(size.height) - 390.).clamp(50., 160.)
         };
         let core_count = self.data.cores.len().max(1) as f32;
-        let available = (f32::from(size.width) * if wide { 0.52 } else { 1.0 } - 30.).max(1.);
+        let gpu_width = if wide { 42. } else { 25. };
+        let available = (f32::from(size.width) * if wide { 0.52 } else { 1.0 }
+            - 30.
+            - if self.data.gpu_usage.is_some() {
+                gpu_width + 14.
+            } else {
+                0.
+            })
+        .max(1.);
         let core_gap = (available / core_count * 0.14).min(4.);
         let core_width = (available / core_count - core_gap).clamp(0.1, 25.);
         let mut panel = div()
@@ -572,70 +647,49 @@ impl Render for Monitor {
         }
         let mut readings = div().flex().flex_col().gap(px(10.)).flex_1().min_w(px(0.));
         if self.settings.cores && !compact {
-            readings = readings.child(div().flex().items_end().gap(px(core_gap)).children(
-                self.data.cores.iter().enumerate().map(|(i, c)| {
-                    div()
-                        .flex()
-                        .flex_col()
-                        .items_center()
-                        .gap(px(3.))
-                        .child(
-                            div()
-                                .relative()
-                                .w(px(core_width))
-                                .h(px(core_height))
-                                .rounded(px(8.))
-                                .bg(rgb(self.track()))
-                                .child(
-                                    div()
-                                        .absolute()
-                                        .bottom_0()
-                                        .w_full()
-                                        .h(px((core_height
-                                            * self
-                                                .displayed_usage
-                                                .get(i)
-                                                .copied()
-                                                .unwrap_or(c.usage)
-                                            / 100.)
-                                            .max(4.)))
-                                        .rounded(px(8.))
-                                        .bg(rgb(self.core_color(c.group))),
-                                )
-                                .child(
-                                    div()
-                                        .absolute()
-                                        .left(px(core_width * 0.2))
-                                        .bottom(px(core_height
-                                            * (c.mhz as f32 / c.max_mhz.max(1) as f32).min(1.)))
-                                        .w(px(core_width * 0.6))
-                                        .h(px(if c.mhz > 0 && c.max_mhz > 0 { 1.5 } else { 0. }))
-                                        .rounded_full()
-                                        .bg(rgb(muted)),
-                                ),
-                        )
-                        .when(core_width >= 17., |el| {
-                            el.child(div().text_size(px(10.)).child(format!("{:.0}", c.usage)))
-                                .child(div().text_size(px(8.5)).text_color(rgb(muted)).child(
-                                    if c.mhz == 0 {
-                                        "—".into()
-                                    } else {
-                                        format!("{:.1}", c.mhz as f32 / 1000.)
-                                    },
-                                ))
-                        })
-                        .id(("core", i))
-                        .tooltip({
-                            let detail = format!(
-                                "Core {} · {:.1}% · reported {} MHz",
-                                c.id + 1,
-                                c.usage,
-                                c.mhz
-                            );
-                            move |_, cx| chrome::tooltip(detail.clone(), cx)
-                        })
-                }),
-            ));
+            readings = readings.child(
+                div()
+                    .flex()
+                    .items_end()
+                    .gap(px(core_gap))
+                    .children(self.data.cores.iter().enumerate().map(|(i, c)| {
+                        div()
+                            .flex()
+                            .flex_col()
+                            .items_center()
+                            .gap(px(3.))
+                            .child(self.bar(
+                                self.displayed_usage.get(i).copied().unwrap_or(c.usage),
+                                (c.mhz, c.max_mhz),
+                                core_width,
+                                core_height,
+                                self.core_color(c.group),
+                            ))
+                            .when(core_width >= 17., |el| {
+                                el.child(div().text_size(px(10.)).child(format!("{:.0}", c.usage)))
+                                    .child(div().text_size(px(8.5)).text_color(rgb(muted)).child(
+                                        if c.mhz == 0 {
+                                            "—".into()
+                                        } else {
+                                            format!("{:.1}", c.mhz as f32 / 1000.)
+                                        },
+                                    ))
+                            })
+                            .id(("core", i))
+                            .tooltip({
+                                let detail = format!(
+                                    "Core {} · {:.1}% · reported {} MHz",
+                                    c.id + 1,
+                                    c.usage,
+                                    c.mhz
+                                );
+                                move |_, cx| chrome::tooltip(detail.clone(), cx)
+                            })
+                    }))
+                    .when(self.data.gpu_usage.is_some(), |row| {
+                        row.child(self.gpu_column(gpu_width, core_height, core_width >= 17.))
+                    }),
+            );
         }
         if self.settings.memory {
             readings = readings
@@ -879,6 +933,12 @@ fn main() {
         .with_assets(gpui_kit::assets::Assets)
         .run(|cx| {
             gpui_kit::init(cx);
+            cx.on_window_closed(|cx, _| {
+                if cx.windows().is_empty() {
+                    cx.quit();
+                }
+            })
+            .detach();
             gpui_kit::open_window(
                 WindowOptions {
                     window_bounds: Some(WindowBounds::Windowed(Bounds::centered(

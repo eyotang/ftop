@@ -157,6 +157,13 @@ impl Backend {
             if !self.gpu_sampler.is_null() {
                 let mut frequency = GpuFrequency::default();
                 if ftop_gpu_sampler_update(self.gpu_sampler, &mut frequency) == 0 {
+                    if let (Some(mhz), Some(max_mhz)) =
+                        (reading(frequency.mhz), reading(frequency.max_mhz))
+                    {
+                        if mhz > 0. && max_mhz > 0. {
+                            snapshot.gpu_frequency = Some((mhz as u64, max_mhz as u64));
+                        }
+                    }
                     snapshot.gpu_power =
                         reading(ftop_gpu_sampler_energy(self.gpu_sampler) / elapsed);
                 }

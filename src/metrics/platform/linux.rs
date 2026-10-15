@@ -3,6 +3,7 @@ use crate::metrics::{Core, Process, Snapshot};
 use std::{
     collections::{HashMap, HashSet},
     fs,
+    io::Read,
     path::PathBuf,
     time::Instant,
 };
@@ -34,25 +35,25 @@ fn utilization(previous: Ticks, current: Ticks) -> f32 {
         / total as f32)
         .clamp(0., 100.)
 }
-struct Proc {
-    name: String,
+struct Proc<'a> {
+    name: &'a str,
     ticks: u64,
     start: u64,
     rss: u64,
 }
-fn process_stat(text: &str, pages: u64) -> Option<Proc> {
+fn process_stat(text: &str, pages: u64) -> Option<Proc<'_>> {
     let start = text.find('(')?;
     let end = text.rfind(')')?;
-    let values: Vec<&str> = text.get(end + 1..)?.split_whitespace().collect();
+    let mut fields = text.get(end + 1..)?.split_whitespace();
+    let user = fields.nth(11)?.parse::<u64>().ok()?;
+    let system = fields.next()?.parse::<u64>().ok()?;
+    let started = fields.nth(6)?.parse::<u64>().ok()?;
+    let rss = fields.nth(1)?.parse::<i64>().ok()?.max(0) as u64;
     Some(Proc {
-        name: text.get(start + 1..end)?.to_owned(),
-        ticks: values
-            .get(11)?
-            .parse::<u64>()
-            .ok()?
-            .saturating_add(values.get(12)?.parse().ok()?),
-        start: values.get(19)?.parse().ok()?,
-        rss: values.get(21)?.parse::<i64>().ok()?.max(0) as u64 * pages,
+        name: text.get(start + 1..end)?,
+        ticks: user.saturating_add(system),
+        start: started,
+        rss: rss.saturating_mul(pages),
     })
 }
 fn memory(text: &str) -> HashMap<&str, u64> {
@@ -210,8 +211,10 @@ impl Backend {
             })
     }
     fn read_processes(&mut self, elapsed: f64) -> Vec<Process> {
-        let mut groups: HashMap<String, Process> = HashMap::new();
-        let mut counters = HashMap::new();
+        let mut groups: HashMap<String, Process> = HashMap::with_capacity(128);
+        let mut counters = HashMap::with_capacity(self.processes.len());
+        let mut buffer = [0u8; 4096];
+        let cpu_scale = 100. / self.ticks_per_second / elapsed / self.meta.len().max(1) as f64;
         for entry in fs::read_dir("/proc").into_iter().flatten().flatten() {
             let Some(pid) = entry
                 .file_name()
@@ -220,9 +223,20 @@ impl Backend {
             else {
                 continue;
             };
-            let Some(p) = fs::read_to_string(entry.path().join("stat"))
+            // procfs stat is one bounded record. One read avoids metadata/EOF probes
+            // and a fresh allocation for every process on every sample.
+            let Ok(mut file) = fs::File::open(entry.path().join("stat")) else {
+                continue;
+            };
+            let Ok(length) = file.read(&mut buffer) else {
+                continue;
+            };
+            if length == buffer.len() {
+                continue;
+            }
+            let Some(p) = std::str::from_utf8(&buffer[..length])
                 .ok()
-                .and_then(|s| process_stat(&s, self.page_size))
+                .and_then(|text| process_stat(text, self.page_size))
             else {
                 continue;
             };
@@ -233,11 +247,9 @@ impl Backend {
                 .map(|(_, ticks)| p.ticks.saturating_sub(*ticks))
                 .unwrap_or(0);
             counters.insert(pid, (p.start, p.ticks));
-            let cpu =
-                (ticks as f64 / self.ticks_per_second / elapsed / self.meta.len().max(1) as f64
-                    * 100.) as f32;
-            let group = groups.entry(p.name.clone()).or_insert(Process {
-                name: p.name,
+            let cpu = (ticks as f64 * cpu_scale) as f32;
+            let group = groups.entry(p.name.to_owned()).or_insert_with(|| Process {
+                name: p.name.to_owned(),
                 cpu: 0.,
                 memory: 0,
                 pids: Vec::new(),
@@ -366,7 +378,8 @@ mod tests {
         fields[12] = "8";
         fields[19] = "1234";
         fields[21] = "25";
-        let p = process_stat(&format!("42 (worker (a) b) {}", fields.join(" ")), 4096).unwrap();
+        let text = format!("42 (worker (a) b) {}", fields.join(" "));
+        let p = process_stat(&text, 4096).unwrap();
         assert_eq!(p.name, "worker (a) b");
         assert_eq!(p.ticks, 20);
         assert_eq!(p.start, 1234);

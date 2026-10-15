@@ -5,9 +5,9 @@ Framework: gpui-kit 0.7.3; Rust 1.98.1. This is an implementation in progress, n
 | Target | Compile | Native launch | Installation |
 | --- | --- | --- | --- |
 | Ubuntu 26.04 x86_64 (local host) | `cargo check` and debug build passed | Wayland launched; X11 launched with `XMODIFIERS=@im=none` | Not tested |
-| Ubuntu 24.04 x86_64 | CI passed at a7ae4d5; latest revision pending | Not tested | Not tested |
-| macOS 14+ | CI passed at a7ae4d5; latest revision pending | Not tested | Not tested |
-| Windows 11 x86_64 | CI passed at a7ae4d5; latest revision pending | Not tested | Not tested |
+| Ubuntu 24.04 x86_64 | CI passed at 3572e31 | Not tested | Not tested |
+| macOS 14+ | CI passed at 3572e31 | Not tested | Not tested |
+| Windows 11 x86_64 | CI passed at 3572e31 | Not tested | Not tested |
 
 `cargo test`: 9 passed on latest local Linux revision. Covers real system sampling, memory/CPU bounds, throughput units, stable version ordering, no downgrade, malformed versions, release-tag injection and oversized manifests. The release-manifest script was exercised with a temporary asset; generated checksum and version matched the fixture. `cargo fmt --check` passed.
 
@@ -31,4 +31,4 @@ A later revision separates Linux, macOS and Windows backends. Local Linux check 
 
 ## Release preparation
 
-Run 38670091638 passed on all three platforms for a7ae4d5. Latest source requires a new run. The packaging workflow builds all platforms before creating a draft prerelease; it does not publish a stable release or stable update manifest. Native macOS/Windows acceptance remains outstanding.
+Run 38670091638 passed on all three platforms for a7ae4d5. Latest revision 3572e31 also passed all three platform checks in run 38671782880. The packaging workflow builds all platforms before creating a draft prerelease; it does not publish a stable release or stable update manifest. Native macOS/Windows acceptance remains outstanding.

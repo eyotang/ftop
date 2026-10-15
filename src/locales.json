@@ -592,5 +592,137 @@
     "更新服务不可用",
     "更新サービスを利用できません",
     "업데이트 서비스를 사용할 수 없습니다"
+  ],
+  [
+    "Updates",
+    "更新",
+    "更新",
+    "업데이트"
+  ],
+  [
+    "Automatic checks: 20 seconds after launch, then every 24 hours.",
+    "启动约 20 秒后自动检查，此后每 24 小时检查一次。",
+    "起動約20秒後、その後24時間ごとに自動確認します。",
+    "시작 약 20초 후, 이후 24시간마다 자동 확인합니다."
+  ],
+  [
+    "Installation guide",
+    "安装引导",
+    "インストール手順",
+    "설치 안내"
+  ],
+  [
+    "This package currently requires manual installation.",
+    "当前软件包需要手动安装。",
+    "このパッケージは手動インストールが必要です。",
+    "현재 패키지는 수동 설치가 필요합니다."
+  ],
+  [
+    "1. Download the DMG for this Mac.",
+    "1. 下载适用于这台 Mac 的 DMG。",
+    "1. この Mac 用の DMG をダウンロードします。",
+    "1. 이 Mac용 DMG를 다운로드하세요."
+  ],
+  [
+    "1. Download the Windows portable ZIP.",
+    "1. 下载 Windows 便携 ZIP。",
+    "1. Windows ポータブル ZIP をダウンロードします。",
+    "1. Windows 포터블 ZIP을 다운로드하세요."
+  ],
+  [
+    "1. Download the Ubuntu deb package.",
+    "1. 下载 Ubuntu deb 安装包。",
+    "1. Ubuntu deb パッケージをダウンロードします。",
+    "1. Ubuntu deb 패키지를 다운로드하세요."
+  ],
+  [
+    "2. Quit ftop using the top-right close button.",
+    "2. 点击右上角关闭按钮，退出 ftop。",
+    "2. 右上の閉じるボタンで ftop を終了します。",
+    "2. 오른쪽 위 닫기 버튼으로 ftop을 종료하세요."
+  ],
+  [
+    "3. Open the DMG, drag ftop.app to Applications, choose Replace, then reopen ftop.",
+    "3. 打开 DMG，将 ftop.app 拖入 Applications 并替换，再重新打开。",
+    "3. DMG を開き、ftop.app を Applications にドラッグして置き換え、再起動します。",
+    "3. DMG를 열고 ftop.app을 Applications로 드래그하여 교체한 뒤 다시 실행하세요."
+  ],
+  [
+    "3. Extract the ZIP, replace the old files, then launch ftop.exe.",
+    "3. 解压 ZIP，替换旧文件，再运行 ftop.exe。",
+    "3. ZIP を展開して古いファイルを置き換え、ftop.exe を実行します。",
+    "3. ZIP을 풀고 기존 파일을 교체한 뒤 ftop.exe를 실행하세요."
+  ],
+  [
+    "3. Install the deb package, then reopen ftop.",
+    "3. 安装 deb 软件包，再重新打开 ftop。",
+    "3. deb パッケージをインストールして ftop を再起動します。",
+    "3. deb 패키지를 설치한 뒤 ftop을 다시 실행하세요."
+  ],
+  [
+    "Download update for this device",
+    "下载此设备的更新包",
+    "この端末用の更新をダウンロード",
+    "이 기기용 업데이트 다운로드"
+  ],
+  [
+    "Download current version for this device",
+    "下载此设备的当前版本",
+    "この端末用の現行版をダウンロード",
+    "이 기기용 현재 버전 다운로드"
+  ],
+  [
+    "Copy install command",
+    "复制安装命令",
+    "インストールコマンドをコピー",
+    "설치 명령 복사"
+  ],
+  [
+    "Release notes and first-launch help",
+    "发布说明与首次启动帮助",
+    "リリース情報と初回起動のヘルプ",
+    "릴리스 정보 및 첫 실행 도움말"
+  ],
+  [
+    "Download and installation guide",
+    "下载与安装引导",
+    "ダウンロードとインストール手順",
+    "다운로드 및 설치 안내"
+  ],
+  [
+    "No package for this platform",
+    "此平台暂无安装包",
+    "この環境向けのパッケージはありません",
+    "이 플랫폼용 패키지가 없습니다"
+  ],
+  [
+    "Back",
+    "返回",
+    "戻る",
+    "뒤로"
+  ],
+  [
+    "Update available · open Settings",
+    "发现新版本 · 打开设置",
+    "更新があります・設定を開く",
+    "새 버전 있음 · 설정 열기"
+  ],
+  [
+    "Download update",
+    "下载更新包",
+    "更新をダウンロード",
+    "업데이트 다운로드"
+  ],
+  [
+    "Download current version",
+    "下载当前版本",
+    "現行版をダウンロード",
+    "현재 버전 다운로드"
+  ],
+  [
+    "Release notes",
+    "发布说明",
+    "リリース情報",
+    "릴리스 정보"
   ]
 ]

@@ -24,6 +24,7 @@ struct Monitor {
     _visibility: Subscription,
     settings: Settings,
     controls: bool,
+    install_guide: bool,
     by_memory: bool,
     selected: Option<String>,
     error: Option<String>,
@@ -146,6 +147,10 @@ impl Monitor {
                 if view
                     .update(cx, |this, cx| {
                         this.updates.apply(event);
+                        if this.controls {
+                            this.updates.dismiss();
+                            this.install_guide |= this.updates.version.is_some();
+                        }
                         cx.notify();
                     })
                     .is_err()
@@ -162,6 +167,7 @@ impl Monitor {
             _visibility: visibility,
             settings,
             controls: false,
+            install_guide: false,
             by_memory: false,
             selected: None,
             error: None,
@@ -172,6 +178,395 @@ impl Monitor {
     }
     fn save(&mut self) {
         self.error = self.settings.save().err();
+    }
+    fn window_controls(&self, cx: &mut Context<Self>, settings_page: bool) -> Div {
+        div()
+            .flex()
+            .items_center()
+            .gap(px(3.))
+            .when(!settings_page, |row| {
+                row.child(
+                    Button::new("settings")
+                        .label("…")
+                        .accessibility_label(self.t("Settings"))
+                        .small()
+                        .p(px(0.))
+                        .size(px(22.))
+                        .selected(self.updates.visible_version().is_some())
+                        .tooltip({
+                            let text = self.t(if self.updates.visible_version().is_some() {
+                                "Update available · open Settings"
+                            } else {
+                                "Settings"
+                            });
+                            move |_, cx| chrome::tooltip(text.clone(), cx)
+                        })
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.controls = true;
+                            this.install_guide |= this.updates.version.is_some();
+                            this.updates.dismiss();
+                            cx.notify();
+                        })),
+                )
+            })
+            .child(
+                Button::new("window-minimize")
+                    .label("−")
+                    .accessibility_label(self.t("Minimize"))
+                    .small()
+                    .p(px(0.))
+                    .size(px(22.))
+                    .tooltip({
+                        let text = self.t("Minimize");
+                        move |_, cx| chrome::tooltip(text.clone(), cx)
+                    })
+                    .on_click(|_, window, _| window.minimize_window()),
+            )
+            .child(
+                Button::new("window-quit")
+                    .label("×")
+                    .accessibility_label(self.t("Quit"))
+                    .small()
+                    .p(px(0.))
+                    .size(px(22.))
+                    .text_color(rgb(0xff6970))
+                    .tooltip({
+                        let text = self.t("Quit");
+                        move |_, cx| chrome::tooltip(text.clone(), cx)
+                    })
+                    .on_click(|_, _, cx| cx.quit()),
+            )
+    }
+    fn key_down(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        let key = event.keystroke.key.as_str();
+        if event.keystroke.modifiers.secondary() {
+            match key {
+                "q" => cx.quit(),
+                "m" => window.minimize_window(),
+                "u" => {
+                    self.controls = true;
+                    self.check_updates();
+                    cx.notify();
+                }
+                "," => {
+                    self.controls = !self.controls;
+                    self.install_guide |= self.updates.version.is_some();
+                    self.updates.dismiss();
+                    cx.notify();
+                }
+                _ => return,
+            }
+            cx.stop_propagation();
+        } else if key == "escape" {
+            self.selected = None;
+            self.controls = false;
+            self.install_guide = false;
+            cx.notify();
+        }
+    }
+    fn settings_page(&self, cx: &mut Context<Self>) -> Stateful<Div> {
+        let mut panel = div()
+            .flex()
+            .flex_col()
+            .gap(px(15.))
+            .p(px(15.))
+            .child(self.update_center(cx));
+        panel = panel.child(
+            div()
+                .flex()
+                .flex_wrap()
+                .items_center()
+                .gap(px(6.))
+                .child(self.t("Language"))
+                .children(
+                    i18n::Language::ALL
+                        .into_iter()
+                        .enumerate()
+                        .map(|(i, language)| {
+                            Button::new(("language", i))
+                                .label(self.t(language.label()))
+                                .small()
+                                .selected(self.settings.language == language)
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    this.settings.language = language;
+                                    this.save();
+                                    cx.notify();
+                                }))
+                        }),
+                ),
+        );
+        panel = panel.child(
+            div()
+                .flex()
+                .flex_wrap()
+                .gap(px(8.))
+                .children(
+                    [
+                        ("Cores", self.settings.cores),
+                        ("Memory", self.settings.memory),
+                        ("Network", self.settings.network),
+                        ("Processes", self.settings.processes),
+                        ("Light", self.settings.light),
+                        ("Motion", self.settings.motion),
+                    ]
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, (label, on))| {
+                        Button::new(("toggle", i))
+                            .label(format!("{} {}", if on { "●" } else { "○" }, self.t(label)))
+                            .selected(on)
+                            .small()
+                            .ghost()
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                match i {
+                                    0 => this.settings.cores = !this.settings.cores,
+                                    1 => this.settings.memory = !this.settings.memory,
+                                    2 => this.settings.network = !this.settings.network,
+                                    3 => this.settings.processes = !this.settings.processes,
+                                    4 => this.settings.light = !this.settings.light,
+                                    _ => this.settings.motion = !this.settings.motion,
+                                };
+                                this.save();
+                                cx.notify();
+                            }))
+                    }),
+                )
+                .child(
+                    Button::new("palette")
+                        .label(self.t("Sea / Graphite / Warm"))
+                        .small()
+                        .ghost()
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.settings.palette = (this.settings.palette + 1) % 3;
+                            this.save();
+                            cx.notify();
+                        })),
+                ),
+        );
+        let mut status = self
+            .data
+            .capabilities
+            .iter()
+            .map(|(name, detail)| self.t(&format!("{name}: {detail}")))
+            .collect::<Vec<_>>();
+        status.push(
+            self.data
+                .gpu_info
+                .clone()
+                .unwrap_or_else(|| "GPU 等待采样".into()),
+        );
+        let status = self.t(&status.join("\n"));
+        panel = panel.child(
+            Button::new("collection-status")
+                .label(self.t("Collection status"))
+                .small()
+                .tooltip(move |_, cx| chrome::tooltip(status.clone(), cx)),
+        );
+
+        if let Some(error) = &self.error {
+            panel = panel.child(format!("{} {error}", self.t("Could not save settings:")));
+        }
+        div()
+            .id("settings-page")
+            .size_full()
+            .flex()
+            .flex_col()
+            .overflow_hidden()
+            .rounded(px(chrome::RADIUS - 1.))
+            .bg(if self.settings.light {
+                rgba(0xf1f4f7ed)
+            } else {
+                rgba(0x181923ed)
+            })
+            .font_family(chrome::FONT)
+            .text_size(px(12.))
+            .text_color(rgb(if self.settings.light {
+                0x182130
+            } else {
+                0xe4e5ec
+            }))
+            .on_key_down(cx.listener(Self::key_down))
+            .child(
+                div()
+                    .flex_none()
+                    .flex()
+                    .items_center()
+                    .gap(px(8.))
+                    .px(px(15.))
+                    .py(px(13.))
+                    .child(
+                        Button::new("settings-back")
+                            .label(format!("‹ {}", self.t("Back")))
+                            .small()
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.controls = false;
+                                cx.notify();
+                            })),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .text_size(px(17.))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .child(self.t("Settings"))
+                            .on_mouse_down(MouseButton::Left, |_, window, _| {
+                                window.start_window_move()
+                            }),
+                    )
+                    .child(self.window_controls(cx, true)),
+            )
+            .child(
+                div()
+                    .id("settings-scroll")
+                    .flex_1()
+                    .min_h(px(0.))
+                    .w_full()
+                    .overflow_y_scroll()
+                    .child(panel),
+            )
+    }
+    fn check_updates(&mut self) {
+        if !self.updates.begin_manual() {
+            return;
+        }
+        if self.update_request.try_send(()).is_err() {
+            self.updates.apply(updater::Event::Finished {
+                manual: true,
+                result: Err("Update service unavailable".into()),
+            });
+        }
+    }
+    fn update_center(&self, cx: &mut Context<Self>) -> Div {
+        let version = self
+            .updates
+            .version
+            .as_deref()
+            .unwrap_or(env!("CARGO_PKG_VERSION"));
+        let mut center =
+            div()
+                .flex()
+                .flex_col()
+                .gap(px(8.))
+                .p(px(10.))
+                .rounded(px(10.))
+                .bg(rgba(0x5b9bff18))
+                .border_1()
+                .border_color(rgba(0x5b9bff44))
+                .child(
+                    div()
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .child(self.t("Updates")),
+                )
+                .child(format!("ftop {}", env!("CARGO_PKG_VERSION")))
+                .child(div().text_size(px(10.5)).child(
+                    self.t("Automatic checks: 20 seconds after launch, then every 24 hours."),
+                ))
+                .child(
+                    div()
+                        .flex()
+                        .flex_wrap()
+                        .gap(px(6.))
+                        .child(
+                            Button::new("check-update")
+                                .label(self.t(if self.updates.checking {
+                                    "Checking…"
+                                } else {
+                                    "Check for updates"
+                                }))
+                                .small()
+                                .disabled(self.updates.checking)
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    this.check_updates();
+                                    cx.notify();
+                                })),
+                        )
+                        .child(
+                            Button::new("show-install-guide")
+                                .label(self.t("Installation guide"))
+                                .small()
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    this.install_guide = !this.install_guide;
+                                    cx.notify();
+                                })),
+                        ),
+                )
+                .when_some(self.updates.message.as_ref(), |center, message| {
+                    center.child(div().text_size(px(10.5)).child(self.t(message)))
+                });
+        if self.install_guide {
+            let steps: &[&str] = if cfg!(target_os = "macos") {
+                &[
+                    "1. Download the DMG for this Mac.",
+                    "2. Quit ftop using the top-right close button.",
+                    "3. Open the DMG, drag ftop.app to Applications, choose Replace, then reopen ftop.",
+                ]
+            } else if cfg!(target_os = "windows") {
+                &[
+                    "1. Download the Windows portable ZIP.",
+                    "2. Quit ftop using the top-right close button.",
+                    "3. Extract the ZIP, replace the old files, then launch ftop.exe.",
+                ]
+            } else {
+                &[
+                    "1. Download the Ubuntu deb package.",
+                    "2. Quit ftop using the top-right close button.",
+                    "3. Install the deb package, then reopen ftop.",
+                ]
+            };
+            center = center
+                .child(
+                    div()
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .child(self.t("Installation guide")),
+                )
+                .child(self.t("This package currently requires manual installation."));
+            if let Ok(url) =
+                updater::package_url(version, std::env::consts::OS, std::env::consts::ARCH)
+            {
+                center = center
+                    .child(
+                        Button::new("download-platform-package")
+                            .label(self.t(if self.updates.version.is_some() {
+                                "Download update"
+                            } else {
+                                "Download current version"
+                            }))
+                            .small()
+                            .bg(rgba(0x5b9bff30))
+                            .on_click(move |_, _, cx| cx.open_url(&url)),
+                    )
+                    .children(
+                        steps
+                            .iter()
+                            .map(|step| div().text_size(px(11.)).child(self.t(step))),
+                    );
+                if cfg!(target_os = "linux") {
+                    let command = format!("sudo apt install ./ftop-{version}-linux-x86_64.deb");
+                    let copy = command.clone();
+                    center = center
+                        .child(div().text_size(px(10.5)).child(command))
+                        .child(
+                            Button::new("copy-install-command")
+                                .label(self.t("Copy install command"))
+                                .small()
+                                .on_click(move |_, _, cx| {
+                                    cx.write_to_clipboard(ClipboardItem::new_string(copy.clone()))
+                                }),
+                        );
+                }
+            } else {
+                center = center.child(self.t("No package for this platform"));
+            }
+            if let Ok(url) = updater::release_page(version) {
+                center = center.child(
+                    Button::new("release-details")
+                        .label(self.t("Release notes"))
+                        .small()
+                        .on_click(move |_, _, cx| cx.open_url(&url)),
+                );
+            }
+        }
+        center
     }
     fn t(&self, text: &str) -> String {
         self.settings.language.text(text)
@@ -579,6 +974,9 @@ impl Monitor {
 }
 impl Render for Monitor {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if self.controls {
+            return chrome::frame(self.settings_page(cx), window);
+        }
         let mut size = window.viewport_size();
         if let Some(inset) = window.client_inset() {
             size.width -= inset * 2.;
@@ -650,184 +1048,56 @@ impl Render for Monitor {
             }))
             .font_family(chrome::FONT)
             .text_size(px(12.));
-        panel = panel.child(
-            div()
-                .id("metrics-header")
-                .relative()
-                .h(px(28.))
-                .flex()
-                .items_center()
-                .justify_between()
-                .child(
-                    self.figure(
-                        "▦",
-                        if self.data.cores.is_empty() {
-                            "— %".into()
-                        } else {
-                            format!("{:.0} %", self.data.cpu)
-                        },
-                        accent,
-                    )
-                    .on_mouse_down(MouseButton::Left, |_, window, _| window.start_window_move())
-                    .text_size(px(17.))
-                    .font_weight(FontWeight::SEMIBOLD),
-                )
-                .when(
-                    self.settings.cores && !compact && self.data.gpu_usage.is_some(),
-                    |header| {
-                        header.child(
-                            div()
-                                .absolute()
-                                .left(px((core_count * (core_width + core_gap) + 10.)
-                                    .min(f32::from(size.width) - 160.)
-                                    .max(70.)))
-                                .top(px(0.))
-                                .h(px(28.))
-                                .flex()
-                                .items_center()
-                                .child(
-                                    self.figure(
-                                        "▧",
-                                        self.data
-                                            .gpu_usage
-                                            .map(|v| format!("{v:.0} %"))
-                                            .unwrap_or_else(|| "—".into()),
-                                        self.gpu_color(),
-                                    )
-                                    .text_size(px(17.))
-                                    .font_weight(FontWeight::SEMIBOLD),
-                                ),
-                        )
+        let header = div()
+            .id("metrics-header")
+            .relative()
+            .h(px(28.))
+            .flex()
+            .items_center()
+            .justify_between()
+            .child(
+                self.figure(
+                    "▦",
+                    if self.data.cores.is_empty() {
+                        "— %".into()
+                    } else {
+                        format!("{:.0} %", self.data.cpu)
                     },
+                    accent,
                 )
-                .child(
-                    Button::new("settings")
-                        .label(if self.controls {
-                            self.t("Done")
-                        } else {
-                            "•••".into()
-                        })
-                        .accessibility_label(self.t(if self.controls {
-                            "Done"
-                        } else {
-                            "Settings"
-                        }))
-                        .small()
-                        .ghost()
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.controls = !this.controls;
-                            cx.notify();
-                        })),
-                ),
-        );
-        if let Some(version) = self.updates.visible_version() {
-            if let Ok(url) = updater::release_page(version) {
-                panel = panel.child(
-                    div().id("update-card").rounded(px(10.)).p(px(10.)).gap(px(6.)).flex().flex_col()
-                        .bg(rgba(0x5b9bff20)).border_1().border_color(rgba(0x5b9bff55))
-                        .child(div().font_weight(FontWeight::SEMIBOLD).child(self.t(&format!("Update available: ftop {version}"))))
-                        .child(div().text_size(px(10.5)).text_color(rgb(muted))
-                            .child(self.t(&format!("Current version: {} · New version: {version}", env!("CARGO_PKG_VERSION")))))
-                        .child(div().text_size(px(10.5)).child(self.t("Detected automatically. Open the download page to install the package for your platform.")))
-                        .child(div().flex().flex_wrap().gap(px(8.))
-                            .child(Button::new("update-card-download").label(self.t("Open download page")).small()
-                                .bg(rgba(0x5b9bff30)).on_click(move |_, _, cx| cx.open_url(&url)))
-                            .child(Button::new("update-card-later").label(self.t("Later")).small()
-                                .on_click(cx.listener(|this, _, _, cx| { this.updates.dismiss(); cx.notify(); }))))
-                );
-            }
-        }
-        if self.controls {
-            panel =
-                panel.child(
-                    div()
-                        .flex()
-                        .flex_wrap()
-                        .items_center()
-                        .gap(px(6.))
-                        .child(self.t("Language"))
-                        .children(i18n::Language::ALL.into_iter().enumerate().map(
-                            |(i, language)| {
-                                Button::new(("language", i))
-                                    .label(self.t(language.label()))
-                                    .small()
-                                    .selected(self.settings.language == language)
-                                    .on_click(cx.listener(move |this, _, _, cx| {
-                                        this.settings.language = language;
-                                        this.save();
-                                        cx.notify();
-                                    }))
-                            },
-                        )),
-                );
-            panel = panel.child(
-                div()
-                    .flex()
-                    .gap(px(8.))
-                    .child(
-                        Button::new("hide")
-                            .label(self.t("Minimize"))
-                            .small()
-                            .ghost()
-                            .on_click(|_, window, _| window.minimize_window()),
+                .on_mouse_down(MouseButton::Left, |_, window, _| window.start_window_move())
+                .text_size(px(if size.width < px(340.) { 14. } else { 17. }))
+                .font_weight(FontWeight::SEMIBOLD),
+            )
+            .when(
+                self.settings.cores && !compact && self.data.gpu_usage.is_some(),
+                |header| {
+                    header.child(
+                        div()
+                            .absolute()
+                            .left(px((core_count * (core_width + core_gap) + 10.)
+                                .min(f32::from(size.width) - 174.)
+                                .max(66.)))
+                            .top(px(0.))
+                            .h(px(28.))
+                            .flex()
+                            .items_center()
+                            .child(
+                                self.figure(
+                                    "▧",
+                                    self.data
+                                        .gpu_usage
+                                        .map(|v| format!("{v:.0} %"))
+                                        .unwrap_or_else(|| "—".into()),
+                                    self.gpu_color(),
+                                )
+                                .text_size(px(if size.width < px(340.) { 14. } else { 17. }))
+                                .font_weight(FontWeight::SEMIBOLD),
+                            ),
                     )
-                    .child(
-                        Button::new("quit")
-                            .label(self.t("Quit"))
-                            .small()
-                            .ghost()
-                            .on_click(|_, _, cx| cx.quit()),
-                    ),
-            );
-            panel = panel.child(
-                div()
-                    .flex()
-                    .flex_wrap()
-                    .gap(px(8.))
-                    .children(
-                        [
-                            ("Cores", self.settings.cores),
-                            ("Memory", self.settings.memory),
-                            ("Network", self.settings.network),
-                            ("Processes", self.settings.processes),
-                            ("Light", self.settings.light),
-                            ("Motion", self.settings.motion),
-                        ]
-                        .into_iter()
-                        .enumerate()
-                        .map(|(i, (label, on))| {
-                            Button::new(("toggle", i))
-                                .label(format!("{} {}", if on { "●" } else { "○" }, self.t(label)))
-                                .selected(on)
-                                .small()
-                                .ghost()
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    match i {
-                                        0 => this.settings.cores = !this.settings.cores,
-                                        1 => this.settings.memory = !this.settings.memory,
-                                        2 => this.settings.network = !this.settings.network,
-                                        3 => this.settings.processes = !this.settings.processes,
-                                        4 => this.settings.light = !this.settings.light,
-                                        _ => this.settings.motion = !this.settings.motion,
-                                    };
-                                    this.save();
-                                    cx.notify();
-                                }))
-                        }),
-                    )
-                    .child(
-                        Button::new("palette")
-                            .label(self.t("Sea / Graphite / Warm"))
-                            .small()
-                            .ghost()
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.settings.palette = (this.settings.palette + 1) % 3;
-                                this.save();
-                                cx.notify();
-                            })),
-                    ),
-            );
-        }
+                },
+            )
+            .child(self.window_controls(cx, false));
         let mut readings = div().flex().flex_col().gap(px(10.)).flex_1().min_w(px(0.));
         if self.settings.cores && !compact {
             readings = readings.child(
@@ -1068,77 +1338,6 @@ impl Render for Monitor {
                 );
             }
         }
-        if self.controls {
-            let mut status = self
-                .data
-                .capabilities
-                .iter()
-                .map(|(name, detail)| self.t(&format!("{name}: {detail}")))
-                .collect::<Vec<_>>();
-            status.push(
-                self.data
-                    .gpu_info
-                    .clone()
-                    .unwrap_or_else(|| "GPU 等待采样".into()),
-            );
-            let status = self.t(&status.join("\n"));
-            panel = panel.child(
-                Button::new("collection-status")
-                    .label(self.t("Collection status"))
-                    .small()
-                    .tooltip(move |_, cx| chrome::tooltip(status.clone(), cx)),
-            );
-            panel = panel.child(
-                div()
-                    .text_size(px(10.5))
-                    .text_color(rgb(muted))
-                    .child(format!("ftop {}", env!("CARGO_PKG_VERSION"))),
-            );
-            panel = panel.child(
-                Button::new("check-update")
-                    .label(self.t(if self.updates.checking {
-                        "Checking…"
-                    } else {
-                        "Check for updates"
-                    }))
-                    .disabled(self.updates.checking)
-                    .small()
-                    .ghost()
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        if !this.updates.begin_manual() {
-                            return;
-                        }
-                        if this.update_request.try_send(()).is_err() {
-                            this.updates.apply(updater::Event::Finished {
-                                manual: true,
-                                result: Err("Update service unavailable".into()),
-                            });
-                        }
-                        cx.notify();
-                    })),
-            );
-
-            panel = panel.child(
-                div().text_size(px(10.5)).text_color(rgb(muted)).child(
-                    self.updates
-                        .message
-                        .clone()
-                        .map(|text| self.t(&text))
-                        .unwrap_or_else(|| self.t("Updates: manual download · checks daily")),
-                ),
-            );
-            if let Some(version) = &self.updates.version {
-                if let Ok(url) = updater::release_page(version) {
-                    panel = panel.child(
-                        Button::new("download-update")
-                            .label(self.t("Open download page"))
-                            .small()
-                            .ghost()
-                            .on_click(move |_, _, cx| cx.open_url(&url)),
-                    );
-                }
-            }
-        }
         if let Some(error) = &self.data.error {
             panel = panel.child(self.t(error));
         }
@@ -1146,24 +1345,51 @@ impl Render for Monitor {
             panel = panel.child(format!("{} {error}", self.t("Could not save settings:")));
         }
         let content = div()
-            .id("panel-scroll")
-            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
-                if event.keystroke.key == "escape" {
-                    this.selected = None;
-                    this.controls = false;
-                    cx.notify();
-                }
-            }))
-            .on_mouse_down(
-                MouseButton::Right,
-                cx.listener(|this, _, _, cx| {
-                    this.controls = !this.controls;
-                    cx.notify();
-                }),
-            )
+            .id("monitor")
             .size_full()
-            .overflow_y_scroll()
-            .child(panel);
+            .flex()
+            .flex_col()
+            .overflow_hidden()
+            .rounded(px(chrome::RADIUS - 1.))
+            .bg(if self.settings.light {
+                rgba(0xf1f4f7ed)
+            } else {
+                rgba(0x181923ed)
+            })
+            .font_family(chrome::FONT)
+            .text_size(px(12.))
+            .text_color(rgb(if self.settings.light {
+                0x182130
+            } else {
+                0xe4e5ec
+            }))
+            .on_key_down(cx.listener(Self::key_down))
+            .child(
+                div()
+                    .flex_none()
+                    .px(px(15.))
+                    .pt(px(13.))
+                    .pb(px(2.))
+                    .child(header),
+            )
+            .child(
+                div()
+                    .id("panel-scroll")
+                    .flex_1()
+                    .min_h(px(0.))
+                    .w_full()
+                    .overflow_y_scroll()
+                    .on_mouse_down(
+                        MouseButton::Right,
+                        cx.listener(|this, _, _, cx| {
+                            this.controls = true;
+                            this.install_guide |= this.updates.version.is_some();
+                            this.updates.dismiss();
+                            cx.notify();
+                        }),
+                    )
+                    .child(panel),
+            );
         chrome::frame(content, window)
     }
 }

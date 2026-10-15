@@ -64,3 +64,9 @@ Final Release measurement: 2.80% of one core / 0.233% of the 12-thread machine /
 The background worker now sends bounded checking/completion events; a single status model handles busy state, availability, manual errors and per-run deferral. Startup (20 seconds) and daily checks remain unchanged. Known newer versions are retained after transient failures; dismissing a card does not remove the settings download entry, and manual recheck reveals it again. The main-view card uses a validated stable-tag release URL and clearly offers manual downloads, not in-app installation. All new strings are translated into four locales.
 
 A state-transition test covers duplicate-request guarding, errors, deferral, recheck, newer-version replacement and up-to-date clearing. Local total: 16 tests. Native Ubuntu X11 wide/minimum-width card screenshots use an explicitly injected temporary update-status fixture, removed before release; they verify presentation, not a live future-release discovery. No extra polling, permanent animation or collection task was added.
+
+## Dedicated settings and installation guide
+
+Replaced expanding settings/main update card with a separate settings page reached from the existing ellipsis. Minimize and quit remain visible in the shared header; Back/Esc returns. Four locales cover update controls and platform-specific installation instructions. Direct-download URL tests cover all supported packages, unsupported architectures and invalid versions. No collector or refresh-rate changes.
+
+Local formatting and locked check/test pass (17 tests); Ubuntu X11 screenshots cover the revision. Temporary GPUI mouse-event injection exercises the ellipsis route; this is not an OS pointer test. The injection is removed from production. Native macOS/Windows interaction, actual package replacement and automatic installation are not verified. Raw window screenshots remain ignored under docs/evidence/settings-final-*.png.

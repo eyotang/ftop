@@ -22,7 +22,7 @@ This is a source/layout audit with native Ubuntu screenshots, not a claim of pix
 | Frequency precision | Two decimal places in GHz | One decimal place to fit the current numbered-column width |
 | Header rhythm | 20-point badge title plus 8-point inner gap | 28-point shared title slot with the global module gap |
 | Memory composition | Compressed segment, pressure state and separate swap meter | Used-memory meter with compressed/swap text; native pressure changes color, but has no separate status label/meter |
-| Settings | Round switches, palette discs and settings sheet | GPUI Kit buttons in an expanding settings area |
+| Settings | Round switches, palette discs and settings sheet | Dedicated settings page opened by the ellipsis, with a Back action; no expanding main-view area |
 | Background/material | AppKit visual material and native compositing | GPUI translucent surface and shadow; compositor/background support varies |
 | Typography | macOS system typeface | macOS system / Segoe UI / Ubuntu Sans and platform font fallback |
 | Motion | Core Animation layer interpolation | Disabled by default for resource use; optional bounded animation |

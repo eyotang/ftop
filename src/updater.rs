@@ -185,3 +185,44 @@ mod tests {
         assert!(parse(&vec![b' '; 65537], "0.1.0").is_err());
     }
 }
+
+/// Manual package target. Only architectures actually published by this project.
+pub fn package_url(version: &str, os: &str, arch: &str) -> Result<String, String> {
+    stable_version(version)?;
+    let suffix = match (os, arch) {
+        ("macos", "aarch64") => "darwin-aarch64.dmg",
+        ("windows", "x86_64") => "windows-x86_64-portable.zip",
+        ("linux", "x86_64") => "linux-x86_64.deb",
+        _ => return Err("No package for this platform".into()),
+    };
+    Ok(format!(
+        "https://github.com/{REPOSITORY}/releases/download/v{version}/ftop-{version}-{suffix}"
+    ))
+}
+#[cfg(test)]
+mod package_tests {
+    use super::*;
+    #[test]
+    fn package_links_match_published_architectures_and_pin_the_tag() {
+        for (os, arch, suffix) in [
+            ("macos", "aarch64", ".dmg"),
+            ("windows", "x86_64", "-portable.zip"),
+            ("linux", "x86_64", ".deb"),
+        ] {
+            let url = package_url("0.1.1", os, arch).unwrap();
+            assert!(url.starts_with(
+                "https://github.com/eyotang/ftop/releases/download/v0.1.1/ftop-0.1.1-"
+            ));
+            assert!(url.ends_with(suffix));
+        }
+        for (os, arch) in [
+            ("macos", "x86_64"),
+            ("windows", "aarch64"),
+            ("linux", "aarch64"),
+            ("other", "x86_64"),
+        ] {
+            assert!(package_url("0.1.1", os, arch).is_err());
+        }
+        assert!(package_url("0.1.1/../../bad", "linux", "x86_64").is_err());
+    }
+}

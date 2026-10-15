@@ -72,7 +72,7 @@ with tempfile.TemporaryDirectory(prefix='ftop-package-') as temporary:
         deb_arch = {'x86_64':'amd64', 'aarch64':'arm64'}.get(arch)
         if not deb_arch:
             raise SystemExit(f'Unsupported Debian architecture: {arch}')
-        (stage / 'DEBIAN/control').write_text(f'Package: ftop\nVersion: {version}\nArchitecture: {deb_arch}\nMaintainer: eyotang <eyotang@users.noreply.github.com>\nDescription: GPUI Kit native system monitor\nDepends: libc6 (>= {platform.libc_ver()[1]}), libxcb1, libxkbcommon0, libxkbcommon-x11-0, libfreetype6, libfontconfig1, libwayland-client0, libvulkan1\n')
+        (stage / 'DEBIAN/control').write_text(f'Package: ftop\nVersion: {version}\nArchitecture: {deb_arch}\nMaintainer: eyotang <2398680+eyotang@users.noreply.github.com>\nDescription: GPUI Kit native system monitor\nDepends: libc6 (>= {platform.libc_ver()[1]}), libxcb1, libxkbcommon0, libxkbcommon-x11-0, libfreetype6, libfontconfig1, libwayland-client0, libvulkan1\n')
         subprocess.run(['dpkg-deb', '--root-owner-group', '--build', str(stage), str(out / f'{name}.deb')], check=True)
     else:
         raise SystemExit(f'Unsupported platform: {system}')
